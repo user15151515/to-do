@@ -189,6 +189,14 @@ body.dragging{user-select:none;-webkit-user-select:none;cursor:grabbing}
 .quick{display:flex;gap:6px;padding:2px 6px 6px;flex-wrap:wrap}
 .quick button{all:unset;cursor:pointer;font-size:14px;padding:6px 10px;border-radius:8px;box-shadow:inset 0 0 0 1px var(--line);color:var(--fg)}
 .quick button:hover{background:var(--hover)}
+.it.parent .bullet{color:var(--muted)}
+.it.parent.open .bullet{transform:rotate(90deg)}
+.icount,.pcount{font-size:13.5px;color:var(--muted);padding:0 5px;font-variant-numeric:tabular-nums;white-space:nowrap}
+.paper.folded{padding-bottom:12px}
+.paper.folded .p-title{margin-bottom:0}
+.paper.folded .bar{margin:8px 0 0}
+.donebar{all:unset;cursor:pointer;display:block;font-size:14px;color:var(--muted);padding:6px 0 8px 28px}
+.donebar:hover{color:var(--fg)}
 #toast{position:fixed;z-index:70;left:50%;transform:translateX(-50%);bottom:calc(22px + env(safe-area-inset-bottom,0px));background:var(--fg);color:var(--paper);border-radius:999px;box-shadow:var(--shadow)}
 #toast button{all:unset;cursor:pointer;font-size:15px;font-weight:500;padding:10px 20px;display:block}
 
@@ -236,6 +244,8 @@ const I = {
   cal:'<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><rect x="2.5" y="3.5" width="11" height="10" rx="2"/><path d="M2.5 6.5h11M5.5 2v3M10.5 2v3"/></svg>',
   prog:'<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><rect x="2" y="6" width="12" height="4" rx="2"/><path d="M4 8h4" stroke-width="2"/></svg>',
   trash:'<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 4.5h11M6.5 4.5V3h3v1.5M4 4.5l.7 8.6a1 1 0 0 0 1 .9h4.6a1 1 0 0 0 1-.9l.7-8.6"/></svg>',
+  up:'<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 10l4-4 4 4"/></svg>',
+  down:'<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6l4 4 4-4"/></svg>',
   more:'<svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><circle cx="3.5" cy="8" r="1.3"/><circle cx="8" cy="8" r="1.3"/><circle cx="12.5" cy="8" r="1.3"/></svg>',
   check:'<svg width="11" height="11" viewBox="0 0 11 11" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 5.8 4.4 8.2 9 3"/></svg>',
 };
@@ -557,31 +567,47 @@ function itemMeta(x){
   if (x.repeat) h += `<button class="irep" data-act="iRepeat" data-id="${x.id}" title="${repText(x.repeat)}">↻</button>`;
   return h;
 }
-function itemHtml(x){
-  return `<li class="it ${x.done?'done':''}" data-id="${x.id}" style="--lvl:${x.lvl}">
+/* which lines are shown: folded lines hide their sub-lines; "hide done" hides finished lines */
+function shownItems(p){
+  const out = [], its = p.items;
+  for (let i = 0; i < its.length; i++) {
+    const x = its[i], e = blockEnd(its, i), kids = e - i - 1;
+    if (p.hideDone && x.done) { i = e - 1; continue; }
+    const sub = kids ? { t:kids, d:its.slice(i + 1, e).filter(y => y.done).length } : null;
+    out.push({ x, sub });
+    if (kids && x.fold) i = e - 1;
+  }
+  return out;
+}
+function itemHtml(x, sub){
+  const parent = !!sub, open = parent && !x.fold;
+  return `<li class="it ${x.done?'done':''} ${parent?'parent':''} ${open?'open':''}" data-id="${x.id}" style="--lvl:${x.lvl}">
     <span class="bullet" data-id="${x.id}" aria-hidden="true">→</span>
     <div class="it-text" contenteditable="plaintext-only" data-edit="item" data-id="${x.id}">${esc(x.t)}</div>
-    <span class="meta">${itemMeta(x)}<button class="imore" data-act="iMenu" data-id="${x.id}" aria-label="Opciones de la línea">${I.more}</button></span>
+    <span class="meta">${parent && x.fold ? `<span class="icount">${sub.d}/${sub.t}</span>` : ''}${itemMeta(x)}<button class="imore" data-act="iMenu" data-id="${x.id}" aria-label="Opciones de la línea">${I.more}</button></span>
     <button class="cb" data-act="check" data-id="${x.id}" aria-label="Marcar">${I.check}</button>
   </li>`;
 }
 function paperHtml(p){
   const s = subj(p.subject), { t, d } = stats(p);
   const global = s && !p.title.trim();
-  return `<article class="paper ${s?'has-sub':''} ${global?'global':''} ${t && d===t ? 'complete' : ''}" data-id="${p.id}" ${s ? `style="--c:${s.color}"` : ''}>
+  const shown = p.fold ? [] : shownItems(p), hiddenDone = p.hideDone ? p.items.filter((x, i) => { if (!x.done) return false; const pi = parentIdx(p.items, i); return pi < 0 || !p.items[pi].done; }).length : 0;
+  return `<article class="paper ${p.fold?'folded':''} ${s?'has-sub':''} ${global?'global':''} ${t && d===t ? 'complete' : ''}" data-id="${p.id}" ${s ? `style="--c:${s.color}"` : ''}>
     <span class="p-grip" aria-hidden="true">${I.grip}</span>
     <header class="p-head">
-      ${s && !global ? `<span class="p-sub">${esc(s.name)}</span>` : ''}${whenHtml(p)}<span class="sp"></span>
+      ${s && !global ? `<span class="p-sub">${esc(s.name)}</span>` : ''}${whenHtml(p)}${p.fold && t ? `<span class="pcount">${d}/${t}</span>` : ''}<span class="sp"></span>
       <span class="ic ${p.date?'':''}" title="Fecha">${I.cal}<input class="dt" type="date" data-id="${p.id}" value="${p.date||''}" aria-label="Fecha"></span>
       <button class="ic ${p.progress?'on':''}" data-act="pProgress" data-id="${p.id}" aria-label="Barra de progreso">${I.prog}</button>
+      <button class="ic ${p.fold?'on':''}" data-act="pFold" data-id="${p.id}" aria-label="${p.fold ? 'Desplegar papel' : 'Plegar papel'}">${p.fold ? I.down : I.up}</button>
       <button class="ic" data-act="pMenu" data-id="${p.id}" aria-label="Más opciones">${I.more}</button>
     </header>
     <h2 class="p-title" contenteditable="plaintext-only" spellcheck="false" data-edit="title" data-id="${p.id}" data-ph="${s ? esc(s.name) : 'Título'}">${esc(p.title)}</h2>
     ${p.progress ? `<div class="bar"><i style="width:${t ? d/t*100 : 0}%"></i></div>` : ''}
-    <div class="lines">
-      <ul class="items" data-p="${p.id}">${p.items.map(itemHtml).join('')}</ul>
+    ${p.fold ? '' : `<div class="lines">
+      <ul class="items" data-p="${p.id}">${shown.map(o => itemHtml(o.x, o.sub)).join('')}</ul>
       <div class="blank" data-act="addHere" data-id="${p.id}"></div>
     </div>
+    ${hiddenDone ? `<button class="donebar" data-act="pHideDone" data-id="${p.id}">${hiddenDone === 1 ? '1 hecha' : hiddenDone + ' hechas'}</button>` : ''}`}
   </article>`;
 }
 function updatePaper(id){
@@ -630,7 +656,8 @@ function bindItems(ul){
     const i = fromP.items.findIndex(x => x.id === id);
     const block = fromP.items.splice(i, blockEnd(fromP.items, i) - i), ids = new Set(block.map(b => b.id));
     let prev = ev.item.previousElementSibling; while (prev && ids.has(prev.dataset.id)) prev = prev.previousElementSibling;
-    const at = prev ? toP.items.findIndex(x => x.id === prev.dataset.id) + 1 : 0;
+    let at = 0;
+    if (prev) { const pi = toP.items.findIndex(x => x.id === prev.dataset.id); at = toP.items[pi].fold ? blockEnd(toP.items, pi) : pi + 1; }
     const prevLvl = at > 0 ? toP.items[at-1].lvl : -1, shift = Math.min(block[0].lvl, prevLvl + 1) - block[0].lvl;
     block.forEach(b => b.lvl = Math.max(0, Math.min(MAXLVL, b.lvl + shift)));
     toP.items.splice(at, 0, ...block);
@@ -648,6 +675,7 @@ function toggle(id){
   refreshMeta(p);
   const li = board.querySelector(`.it[data-id="${id}"]`);
   if (li && val) { li.classList.remove('pop'); void li.offsetWidth; li.classList.add('pop'); }
+  if (p.hideDone && val) setTimeout(() => updatePaper(p.id), 650);
   const after = stats(p);
   sound(!val ? 'uncheck' : after.d === after.t && before.d !== before.t ? 'done' : 'check');
 }
@@ -775,6 +803,14 @@ const A = {
   pDelete(id){ hideMenu(); snap(); S.papers = S.papers.filter(p => p.id !== id); render(); toast(); },
   pMenu(id, b){ const r = b.getBoundingClientRect(); paperMenu(id, r.left, r.bottom); },
   pDup(id){ hideMenu(); dupPaper(id); },
+  pFold(id){ hideMenu(); const p = P(id); p.fold = !p.fold; updatePaper(id); },
+  pHideDone(id){ hideMenu(); const p = P(id); p.hideDone = !p.hideDone; updatePaper(id); },
+  pFoldAll(id){
+    hideMenu(); const p = P(id), par = p.items.filter((x, i) => blockEnd(p.items, i) > i + 1);
+    const fold = !par.every(x => x.fold); par.forEach(x => x.fold = fold); updatePaper(id);
+  },
+  iFold(id){ hideMenu(); const { p, it } = findItem(id); it.fold = !it.fold; updatePaper(p.id); },
+  iIndent(id, b){ hideMenu(); setLevel(id, +b.dataset.d); const { p } = findItem(id); updatePaper(p.id); },
   pEmpty(id){ hideMenu(); snap(); P(id).items = []; updatePaper(id); toast(); },
   pUncheck(id){ hideMenu(); P(id).items.forEach(x => x.done = false); updatePaper(id); },
   iMenu(id, b){ const r = b.getBoundingClientRect(); itemMenu(id, r.right - 200, r.bottom); },
@@ -841,7 +877,11 @@ const A = {
 document.addEventListener('click', e => {
   if (suppressClick) { suppressClick = false; return; }
   const bl = e.target.closest('.bullet');
-  if (bl) { setLevel(bl.dataset.id, 1, true); return; }
+  if (bl) {
+    const { p, i, it } = findItem(bl.dataset.id);
+    if (it && blockEnd(p.items, i) > i + 1) { it.fold = !it.fold; updatePaper(p.id); } else setLevel(bl.dataset.id, 1, true);
+    return;
+  }
   const b = e.target.closest('[data-act]'); if (!b) return;
   A[b.dataset.act]?.(b.dataset.id, b, e);
 });
@@ -881,7 +921,12 @@ function openMenu(sid, x, y){
 }
 function paperMenu(id, x, y){
   const p = P(id), any = p.items.length, anyDone = p.items.some(x => x.done);
-  showMenu(`<button class="mi" data-act="pDup" data-id="${id}">Duplicar papel</button>
+  const parents = p.items.some((x, i) => blockEnd(p.items, i) > i + 1), allFolded = parents && p.items.every((x, i) => blockEnd(p.items, i) === i + 1 || x.fold);
+  showMenu(`<button class="mi" data-act="pFold" data-id="${id}">${p.fold ? 'Desplegar papel' : 'Plegar papel'}</button>
+    ${parents && !p.fold ? `<button class="mi" data-act="pFoldAll" data-id="${id}">${allFolded ? 'Desplegar subapartados' : 'Plegar subapartados'}</button>` : ''}
+    ${anyDone || p.hideDone ? `<button class="mi" data-act="pHideDone" data-id="${id}">${p.hideDone ? 'Mostrar hechas' : 'Ocultar hechas'}</button>` : ''}
+    <div class="msep"></div>
+    <button class="mi" data-act="pDup" data-id="${id}">Duplicar papel</button>
     ${anyDone ? `<button class="mi" data-act="pUncheck" data-id="${id}">Desmarcar todo</button>` : ''}
     ${any ? `<button class="mi" data-act="pEmpty" data-id="${id}">Vaciar papel</button>` : ''}
     <button class="mi danger" data-act="pDelete" data-id="${id}">Eliminar papel</button>`, x, y);
@@ -908,6 +953,9 @@ function itemMenu(id, x, y){
     <button class="mi" data-act="iCopy" data-id="${id}">Copiar${hasSubs ? ' con sus subtareas' : ''}</button>
     ${clip ? `<button class="mi" data-act="iPasteBelow" data-id="${id}">Pegar debajo</button>${it.lvl < MAXLVL ? `<button class="mi" data-act="iPasteIn" data-id="${id}">Pegar dentro</button>` : ''}` : ''}
     ${hasSubs && sibs ? `<button class="mi" data-act="iSubs" data-id="${id}">Poner sus subtareas en las otras ${sibs}</button>` : ''}
+    ${hasSubs ? `<button class="mi" data-act="iFold" data-id="${id}">${it.fold ? 'Desplegar' : 'Plegar'}</button>` : ''}
+    ${i > 0 && it.lvl < MAXLVL && p.items[i-1].lvl >= it.lvl ? `<button class="mi" data-act="iIndent" data-id="${id}" data-d="1">Convertir en subtarea</button>` : ''}
+    ${it.lvl > 0 ? `<button class="mi" data-act="iIndent" data-id="${id}" data-d="-1">Sacar un nivel</button>` : ''}
     <div class="msep"></div>
     <button class="mi" data-act="iDateMenu" data-id="${id}">${it.date ? 'Cambiar fecha' : 'Poner fecha'}</button>
     <button class="mi" data-act="iRepeatMenu" data-id="${id}">${it.repeat ? 'Repetición: ' + repText(it.repeat) : 'Repetir…'}</button>
@@ -1064,7 +1112,11 @@ document.addEventListener('keydown', e => {
       p.items.splice(i, 1, ...list);
       pendingFocus = { sel:`[data-edit="item"][data-id="${list[list.length-1].id}"]`, caret:'end' }; updatePaper(p.id); return;
     }
-    it.t = v; commitLine(id, v); addItem(p.id, i, it.lvl); return;
+    it.t = v; commitLine(id, v);
+    const e2 = blockEnd(p.items, i);
+    if (e2 > i + 1) { if (it.fold) addItem(p.id, e2 - 1, it.lvl); else addItem(p.id, i, Math.min(MAXLVL, it.lvl + 1)); }
+    else addItem(p.id, i, it.lvl);
+    return;
   }
   if (e.key === 'Backspace' && !el.textContent) {
     e.preventDefault(); const before = editOrig.get(id); editOrig.delete(id); const pr = parentOf(id);
