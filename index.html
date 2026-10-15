@@ -272,11 +272,37 @@ let S = load();
 if (!S || !Array.isArray(S.papers)) S = seed();
 const dataStr = () => JSON.stringify({ subjects:S.subjects, papers:S.papers });
 let lastData = dataStr();
-let saveT; const save = () => { clearTimeout(saveT); saveT = setTimeout(() => {
+/* undo history: one entry per action; continuous typing in the same line counts as one */
+let undoStack = [], redoStack = [], histEl = null, histT = 0;
+function doSave(){
+  clearTimeout(saveT);
   const d = dataStr();
-  if (d !== lastData) { lastData = d; S.updatedAt = Date.now(); schedulePush(); }
+  if (d !== lastData) {
+    const a = document.activeElement, typing = a?.isContentEditable ? a.dataset.id : null;
+    if (!(typing && typing === histEl && Date.now() - histT < 4000)) { undoStack.push(lastData); if (undoStack.length > 200) undoStack.shift(); }
+    histEl = typing; histT = Date.now(); redoStack = [];
+    lastData = d; S.updatedAt = Date.now(); schedulePush();
+  }
   try { localStorage.setItem(KEY, JSON.stringify(S)); } catch(e){}
-}, 120); };
+}
+let saveT; const save = () => { clearTimeout(saveT); saveT = setTimeout(doSave, 120); };
+function restoreData(str){
+  const d = JSON.parse(str);
+  S.subjects = d.subjects || []; S.papers = d.papers || [];
+  lastData = str; histEl = null; S.updatedAt = Date.now(); schedulePush();
+  try { localStorage.setItem(KEY, JSON.stringify(S)); } catch(e){}
+  render();
+}
+function undo(){
+  const a = document.activeElement; if (a?.isContentEditable) a.blur();
+  doSave(); if (!undoStack.length) return;
+  redoStack.push(lastData); restoreData(undoStack.pop()); $('#toast').hidden = true; hideMenu();
+}
+function redo(){
+  const a = document.activeElement; if (a?.isContentEditable) a.blur();
+  doSave(); if (!redoStack.length) return;
+  undoStack.push(lastData); restoreData(redoStack.pop());
+}
 
 /* ---------- sync (Firebase Firestore, one document per board, keyed by a long random code) ---------- */
 const FB = { apiKey:"AIzaSyDI5TNe9PeTHGjraciRTb-zqsxFzwz1wlQ", authDomain:"to-do-d35e2.firebaseapp.com", projectId:"to-do-d35e2", storageBucket:"to-do-d35e2.firebasestorage.app", messagingSenderId:"21733568444", appId:"1:21733568444:web:4c03a8c1cdec49c6f945b9" };
@@ -340,6 +366,7 @@ function applyRemote(r){
   }
   if (checkResets()) localWins = true;
   lastData = localWins ? '' : dataStr();
+  undoStack = []; redoStack = [];
   try { localStorage.setItem(KEY, JSON.stringify(S)); } catch(e){}
   render();
   if (keep) {
@@ -393,7 +420,7 @@ const blockEnd = (items, i) => { let k = i + 1; while (k < items.length && items
 const visible = () => S.filter === 'all' ? S.papers : S.papers.filter(p => p.subject === S.filter).sort((a, b) => (a.title.trim() ? 1 : 0) - (b.title.trim() ? 1 : 0));
 
 let undoSnap = null, pendingFocus = null;
-const snap = () => { undoSnap = JSON.stringify(S); };
+const snap = () => {};
 
 /* ---------- sound ---------- */
 let ac;
@@ -651,7 +678,64 @@ function addItem(pid, afterIdx, lvl){
 
 /* ---------- toast / settings ---------- */
 let toastT;
-function toast(){ const t = $('#toast'); t.innerHTML = '<button data-act="undo">Deshacer</button>'; t.hidden = false; clearTimeout(toastT); toastT = setTimeout(() => t.hidden = true, 5000); }
+let offerFn = null;
+function toast(label, fn, ms){
+  const t = $('#toast'); offerFn = fn || null;
+  t.innerHTML = `<button data-act="${fn ? 'offer' : 'undo'}">${esc(label || 'Deshacer')}</button>`;
+  t.hidden = false; clearTimeout(toastT); toastT = setTimeout(() => { t.hidden = true; offerFn = null; }, ms || 5000);
+}
+
+/* ---------- sibling helpers: offer to repeat a subtask change in the sibling lines ---------- */
+function parentIdx(items, i){ for (let k = i - 1; k >= 0; k--) if (items[k].lvl < items[i].lvl) return k; return -1; }
+function siblingIds(items, i){
+  let ps = 0, pe = items.length; const pi = parentIdx(items, i);
+  if (pi >= 0) { ps = pi + 1; pe = blockEnd(items, pi); }
+  const r = []; for (let k = ps; k < pe; k++) if (items[k].lvl === items[i].lvl && k !== i) r.push(items[k].id); return r;
+}
+function childIdx(items, i, text){
+  const e = blockEnd(items, i), t = text.trim().toLowerCase();
+  for (let k = i + 1; k < e; k++) if (items[k].lvl === items[i].lvl + 1 && items[k].t.trim().toLowerCase() === t) return k;
+  return -1;
+}
+const quote = t => `«${t.length > 22 ? t.slice(0, 21) + '…' : t}»`;
+let addOffer = null;
+function offerSubtask(id, before, after){
+  const { p, i, it } = findItem(id); if (!it || !it.lvl) return;
+  const pi = parentIdx(p.items, i); if (pi < 0) return;
+  const parentId = p.items[pi].id, sibs = siblingIds(p.items, pi); if (!sibs.length) return;
+  if (!before && after) {
+    if (!addOffer || addOffer.parentId !== parentId) addOffer = { pid:p.id, parentId, texts:[] };
+    if (!addOffer.texts.includes(after)) addOffer.texts.push(after);
+    const texts = addOffer.texts.slice(), lvl = it.lvl;
+    const targets = sibs.filter(sid => { const k = p.items.findIndex(x => x.id === sid); return texts.some(t => childIdx(p.items, k, t) < 0); });
+    if (!targets.length) return;
+    toast(`Añadir ${texts.length > 1 ? texts.length + ' subtareas' : quote(after)} a las otras ${targets.length}`, () => {
+      for (const sid of targets) {
+        const k = p.items.findIndex(x => x.id === sid); if (k < 0) continue;
+        const add = texts.filter(t => childIdx(p.items, k, t) < 0).map(t => It(t, Math.min(MAXLVL, p.items[k].lvl + 1)));
+        p.items.splice(blockEnd(p.items, k), 0, ...add);
+      }
+      addOffer = null; updatePaper(p.id);
+    }, 9000);
+  } else if (before && after && before !== after) {
+    const targets = sibs.filter(sid => childIdx(p.items, p.items.findIndex(x => x.id === sid), before) >= 0);
+    if (!targets.length) return;
+    toast(`Cambiar también en las otras ${targets.length}`, () => {
+      for (const sid of targets) { const k = p.items.findIndex(x => x.id === sid), c = childIdx(p.items, k, before); if (c >= 0) p.items[c].t = after; }
+      updatePaper(p.id);
+    }, 9000);
+  }
+}
+function offerDelete(p, parentId, text){
+  const pi = p.items.findIndex(x => x.id === parentId); if (pi < 0) return;
+  const targets = siblingIds(p.items, pi).filter(sid => childIdx(p.items, p.items.findIndex(x => x.id === sid), text) >= 0);
+  if (!targets.length) return;
+  toast(`Borrar también en las otras ${targets.length}`, () => {
+    for (const sid of targets) { const k = p.items.findIndex(x => x.id === sid), c = childIdx(p.items, k, text); if (c >= 0) p.items.splice(c, blockEnd(p.items, c) - c); }
+    updatePaper(p.id);
+  }, 9000);
+}
+function parentOf(id){ const { p, i } = findItem(id); if (!p) return null; const pi = parentIdx(p.items, i); return pi >= 0 ? p.items[pi].id : null; }
 function openSheet(){
   const sh = $('#sheet'), standalone = window.self === window.top;
   sh.innerHTML = `<div class="sheet-card" role="dialog" aria-label="Ajustes">
@@ -715,12 +799,18 @@ const A = {
   repOff(id){ const { it, p } = findItem(id); delete it.repeat; delete it.lastReset; hideMenu(); updatePaper(p.id); },
   iDup(id){ hideMenu(); dupItem(id); },
   iSubs(id){ hideMenu(); copySubs(id); },
-  iDel(id){ hideMenu(); const { p, i } = findItem(id); if (!p) return; snap(); p.items.splice(i, blockEnd(p.items, i) - i); updatePaper(p.id); toast(); },
+  iDel(id){
+    hideMenu(); const { p, i, it } = findItem(id); if (!p) return;
+    const pr = parentOf(id), text = it.t;
+    p.items.splice(i, blockEnd(p.items, i) - i); updatePaper(p.id);
+    if (pr && text.trim()) { doSave(); offerDelete(p, pr, text); } else toast();
+  },
   check(id){ if (skipCheck) { skipCheck = false; return; } toggle(id); },
   renameSubject(id){ hideMenu(); startRename(id); },
   delSubject(id){ hideMenu(); snap(); S.subjects = S.subjects.filter(x => x.id !== id); S.papers.forEach(p => { if (p.subject === id) p.subject = ''; }); render(); toast(); },
   addSubject(){ const s = { id:uid(), name:'', color:COLORS[S.subjects.length % COLORS.length] }; S.subjects.push(s); render(); startRename(s.id, true); },
-  undo(){ if (!undoSnap) return; S = JSON.parse(undoSnap); undoSnap = null; $('#toast').hidden = true; render(); },
+  undo(){ undo(); },
+  offer(){ const f = offerFn; offerFn = null; $('#toast').hidden = true; f && f(); },
   settings(){ openSheet(); },
   closeSheet(){ $('#sheet').hidden = true; },
   toggleSound(_, b){ S.sound = !S.sound; b.classList.toggle('on', S.sound); save(); if (S.sound) sound('check'); },
@@ -919,15 +1009,38 @@ document.addEventListener('input', e => {
   if (el.dataset.edit === 'title') P(el.dataset.id).title = v; else { const r = findItem(el.dataset.id); if (r.it) r.it.t = v; }
   save();
 });
+const editOrig = new Map();
+document.addEventListener('focusin', e => { const el = e.target; if (el.matches?.('[data-edit="item"]') && !editOrig.has(el.dataset.id)) editOrig.set(el.dataset.id, el.textContent.trim()); });
+function commitLine(id, v){
+  if (!editOrig.has(id)) return;
+  const before = editOrig.get(id); editOrig.delete(id);
+  if (v && v !== before) offerSubtask(id, before, v);
+}
 document.addEventListener('focusout', e => {
   const el = e.target;
   if (el.matches?.('[data-edit="item"]')) {
-    const v = el.textContent.replace(/\s+/g,' ').trim();
-    if (!v) removeItem(el.dataset.id, false); else { const r = findItem(el.dataset.id); if (r.it) { r.it.t = v; save(); } }
+    const v = el.textContent.replace(/\s+/g,' ').trim(), id = el.dataset.id;
+    if (!v) {
+      const before = editOrig.get(id); editOrig.delete(id);
+      const pr = parentOf(id), { p } = findItem(id);
+      removeItem(id, false);
+      if (before && pr) offerDelete(p, pr, before);
+    } else { const r = findItem(id); if (r.it) { r.it.t = v; save(); } commitLine(id, v); }
   } else if (el.matches?.('[data-edit="title"]')) {
     const p = P(el.dataset.id); if (p) { p.title = el.textContent.replace(/\s+/g,' ').trim(); if (!p.title) el.textContent = ''; save(); }
   }
 });
+document.addEventListener('keydown', e => {
+  if ((e.ctrlKey || e.metaKey) && !e.altKey) {
+    const k = e.key.toLowerCase(), t = e.target;
+    const nativeField = t.matches?.('input, textarea') && !t.matches('.add');
+    if (!nativeField && (k === 'z' || k === 'y')) {
+      e.preventDefault();
+      if (k === 'y' || e.shiftKey) redo(); else undo();
+      return;
+    }
+  }
+}, true);
 document.addEventListener('keydown', e => {
   const el = e.target;
   if (e.key === 'Escape') { if (!menu.hidden) hideMenu(); else if (!$('#sheet').hidden) $('#sheet').hidden = true; else el.blur?.(); return; }
@@ -951,9 +1064,12 @@ document.addEventListener('keydown', e => {
       p.items.splice(i, 1, ...list);
       pendingFocus = { sel:`[data-edit="item"][data-id="${list[list.length-1].id}"]`, caret:'end' }; updatePaper(p.id); return;
     }
-    it.t = v; addItem(p.id, i, it.lvl); return;
+    it.t = v; commitLine(id, v); addItem(p.id, i, it.lvl); return;
   }
-  if (e.key === 'Backspace' && !el.textContent) { e.preventDefault(); removeItem(id, true); }
+  if (e.key === 'Backspace' && !el.textContent) {
+    e.preventDefault(); const before = editOrig.get(id); editOrig.delete(id); const pr = parentOf(id);
+    removeItem(id, true); if (before && pr) offerDelete(p, pr, before);
+  }
 });
 document.addEventListener('paste', e => {
   const el = e.target.closest?.('[data-edit]'); if (!el) return;
