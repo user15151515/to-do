@@ -94,13 +94,14 @@ body.dragging{user-select:none;-webkit-user-select:none;cursor:grabbing}
 .ic.reveal{width:auto;opacity:1}
 .p-title{font-size:20px;line-height:1.3;font-weight:600;letter-spacing:-.015em;margin:2px 0 10px;outline:none;border-radius:6px;padding:2px 4px;margin-left:-4px;overflow-wrap:anywhere;text-wrap:balance}
 .p-title:focus{background:var(--hover)}
-.p-title:empty::before{content:"Título";color:var(--faint);font-weight:500}
+.p-title:empty::before{content:attr(data-ph);color:var(--faint);font-weight:500}
+.paper.has-sub .p-title:empty::before{color:var(--c);font-weight:600}
 .bar{height:4px;border-radius:4px;background:var(--rule);overflow:hidden;margin:0 0 10px}
 .bar i{display:block;height:100%;border-radius:4px;background:var(--c,var(--fg));transition:width .4s cubic-bezier(.3,.7,.3,1)}
 
 .lines{background-image:repeating-linear-gradient(to bottom,transparent 0 calc(var(--lh) - 1px),var(--rule) calc(var(--lh) - 1px) var(--lh))}
 .items{list-style:none;margin:0;padding:0;min-height:1px}
-.it{display:grid;grid-template-columns:22px minmax(0,1fr) 26px;column-gap:6px;align-items:start;padding-left:calc(var(--lvl,0) * 24px);line-height:var(--lh);touch-action:pan-y;transition:padding-left .18s ease}
+.it{display:grid;grid-template-columns:22px minmax(0,1fr) auto 26px;column-gap:6px;align-items:start;padding-left:calc(var(--lvl,0) * 24px);line-height:var(--lh);touch-action:pan-y;transition:padding-left .18s ease}
 .bullet{color:var(--faint);cursor:pointer;touch-action:none;user-select:none;-webkit-user-select:none;text-align:center;transition:color .15s,transform .15s;border-radius:6px}
 .bullet:hover{color:var(--fg);background:var(--hover)}
 .it-text{outline:none;min-width:0;overflow-wrap:anywhere;border-radius:4px;padding:0 4px;margin-left:-4px;transition:color .25s}
@@ -172,6 +173,22 @@ body.dragging{user-select:none;-webkit-user-select:none;cursor:grabbing}
 .every button{all:unset;box-sizing:border-box;width:32px;height:32px;border-radius:8px;display:grid;place-items:center;cursor:pointer;box-shadow:inset 0 0 0 1px var(--line);color:var(--fg)}
 .every button:hover{background:var(--hover)}
 .rep-hint{margin:0;padding:4px 10px 8px;font-size:14px;color:var(--muted)}
+.meta{display:flex;align-items:center;gap:2px;height:var(--lh)}
+.idate,.irep{all:unset;cursor:pointer;font-size:13.5px;color:var(--muted);padding:0 5px;border-radius:6px;line-height:24px;white-space:nowrap}
+.idate:hover,.irep:hover{background:var(--hover);color:var(--fg)}
+.idate.soon,.idate.late{color:var(--warn)}
+.it.done .idate{color:var(--faint)}
+.imore{all:unset;cursor:pointer;width:24px;height:24px;display:grid;place-items:center;border-radius:6px;color:var(--faint);opacity:0}
+.imore:hover{background:var(--hover);color:var(--fg)}
+.it:hover .imore,.it:focus-within .imore{opacity:1}
+.imore:focus-visible{opacity:1;outline:2px solid var(--fg)}
+@media (hover:none){.it:not(:focus-within) .imore{display:none}}
+.msep{height:1px;background:var(--line);margin:4px 6px}
+.dwrap{padding:6px}
+.pop-date{all:unset;box-sizing:border-box;width:100%;padding:8px 10px;border-radius:8px;background:var(--hover);font:15px var(--ui);color:var(--fg)}
+.quick{display:flex;gap:6px;padding:2px 6px 6px;flex-wrap:wrap}
+.quick button{all:unset;cursor:pointer;font-size:14px;padding:6px 10px;border-radius:8px;box-shadow:inset 0 0 0 1px var(--line);color:var(--fg)}
+.quick button:hover{background:var(--hover)}
 #toast{position:fixed;z-index:70;left:50%;transform:translateX(-50%);bottom:calc(22px + env(safe-area-inset-bottom,0px));background:var(--fg);color:var(--paper);border-radius:999px;box-shadow:var(--shadow)}
 #toast button{all:unset;cursor:pointer;font-size:15px;font-weight:500;padding:10px 20px;display:block}
 
@@ -373,7 +390,7 @@ const P = id => S.papers.find(p => p.id === id);
 const subj = id => S.subjects.find(s => s.id === id);
 const findItem = id => { for (const p of S.papers) { const i = p.items.findIndex(x => x.id === id); if (i > -1) return { p, i, it:p.items[i] }; } return {}; };
 const blockEnd = (items, i) => { let k = i + 1; while (k < items.length && items[k].lvl > items[i].lvl) k++; return k; };
-const visible = () => S.filter === 'all' ? S.papers : S.papers.filter(p => p.subject === S.filter);
+const visible = () => S.filter === 'all' ? S.papers : S.papers.filter(p => p.subject === S.filter).sort((a, b) => (a.title.trim() ? 1 : 0) - (b.title.trim() ? 1 : 0));
 
 let undoSnap = null, pendingFocus = null;
 const snap = () => { undoSnap = JSON.stringify(S); };
@@ -442,17 +459,41 @@ function lastResetDate(r){
 function checkResets(){
   let changed = false;
   for (const p of S.papers) {
-    if (!p.repeat) continue;
-    const r = lastResetDate(p.repeat);
-    if (r && (!p.lastReset || r > p.lastReset)) { p.lastReset = r; p.items.forEach(x => x.done = false); changed = true; }
+    if (p.repeat) { p.items.forEach(x => { if (!x.lvl) { x.repeat = p.repeat; x.lastReset = p.lastReset; } }); delete p.repeat; delete p.lastReset; changed = true; }
+    p.items.forEach((x, i) => {
+      if (!x.repeat) return;
+      const r = lastResetDate(x.repeat);
+      if (r && (!x.lastReset || r > x.lastReset)) {
+        x.lastReset = r;
+        const e = blockEnd(p.items, i); for (let k = i; k < e; k++) p.items[k].done = false;
+        let lvl = x.lvl; for (let k = i - 1; k >= 0 && lvl > 0; k--) if (p.items[k].lvl < lvl) { p.items[k].done = false; lvl = p.items[k].lvl; }
+        changed = true;
+      }
+    });
   }
   return changed;
+}
+let clip = null;
+function blockOf(id){ const { p, i } = findItem(id); return p ? p.items.slice(i, blockEnd(p.items, i)) : []; }
+function copyItem(id){
+  const b = blockOf(id); if (!b.length) return;
+  const base = b[0].lvl;
+  clip = b.map(x => ({ t:x.t, lvl:x.lvl - base }));
+  const text = clip.map(x => '  '.repeat(x.lvl) + x.t).join('\n');
+  try { navigator.clipboard.writeText(text).catch(() => {}); } catch(e){}
+}
+function pasteItem(id, inside){
+  if (!clip) return;
+  const { p, i, it } = findItem(id); if (!p) return;
+  const base = it.lvl + (inside ? 1 : 0), at = blockEnd(p.items, i);
+  const add = clip.map(x => ({ id:uid(), t:x.t, lvl:Math.min(MAXLVL, base + x.lvl), done:false }));
+  p.items.splice(at, 0, ...add); updatePaper(p.id);
 }
 const bump = t => t.replace(/(\d+)(\D*)$/, (m, n, rest) => String(+n + 1).padStart(n.length, '0') + rest);
 function dupItem(id){
   const { p, i } = findItem(id); if (!p) return;
   const e = blockEnd(p.items, i);
-  const block = p.items.slice(i, e).map((x, k) => ({ id:uid(), t:k === 0 ? bump(x.t) : x.t, lvl:x.lvl, done:false }));
+  const block = p.items.slice(i, e).map((x, k) => ({ id:uid(), t:k === 0 ? bump(x.t) : x.t, lvl:x.lvl, done:false, ...(x.repeat ? { repeat:x.repeat, lastReset:x.lastReset } : {}) }));
   p.items.splice(e, 0, ...block);
   pendingFocus = { sel:`[data-edit="item"][data-id="${block[0].id}"]`, caret:'end' }; updatePaper(p.id);
 }
@@ -477,24 +518,38 @@ function dupPaper(id){
   S.papers.splice(S.papers.indexOf(p) + 1, 0, c);
   pendingFocus = { sel:`[data-edit="title"][data-id="${c.id}"]`, caret:'all' }; render();
 }
+function shortDate(s){
+  const n = days(s);
+  if (n === 0) return 'Hoy'; if (n === 1) return 'Mañana'; if (n === -1) return 'Ayer';
+  if (n > 1 && n < 7) return parse(s).toLocaleDateString('es', { weekday:'short' }).replace('.','');
+  return parse(s).toLocaleDateString('es', { day:'numeric', month:'short' }).replace('.','');
+}
+function itemMeta(x){
+  let h = '';
+  if (x.date) { const n = days(x.date), cls = n < 0 && !x.done ? 'late' : (n >= 0 && n <= 2 && !x.done ? 'soon' : ''); h += `<button class="idate ${cls}" data-act="iDate" data-id="${x.id}" title="${fmtLong(x.date)}">${shortDate(x.date)}</button>`; }
+  if (x.repeat) h += `<button class="irep" data-act="iRepeat" data-id="${x.id}" title="${repText(x.repeat)}">↻</button>`;
+  return h;
+}
 function itemHtml(x){
   return `<li class="it ${x.done?'done':''}" data-id="${x.id}" style="--lvl:${x.lvl}">
     <span class="bullet" data-id="${x.id}" aria-hidden="true">→</span>
     <div class="it-text" contenteditable="plaintext-only" data-edit="item" data-id="${x.id}">${esc(x.t)}</div>
+    <span class="meta">${itemMeta(x)}<button class="imore" data-act="iMenu" data-id="${x.id}" aria-label="Opciones de la línea">${I.more}</button></span>
     <button class="cb" data-act="check" data-id="${x.id}" aria-label="Marcar">${I.check}</button>
   </li>`;
 }
 function paperHtml(p){
   const s = subj(p.subject), { t, d } = stats(p);
-  return `<article class="paper ${s?'has-sub':''} ${t && d===t ? 'complete' : ''}" data-id="${p.id}" ${s ? `style="--c:${s.color}"` : ''}>
+  const global = s && !p.title.trim();
+  return `<article class="paper ${s?'has-sub':''} ${global?'global':''} ${t && d===t ? 'complete' : ''}" data-id="${p.id}" ${s ? `style="--c:${s.color}"` : ''}>
     <span class="p-grip" aria-hidden="true">${I.grip}</span>
     <header class="p-head">
-      ${s ? `<span class="p-sub">${esc(s.name)}</span>` : ''}${whenHtml(p)}${p.repeat ? `<button class="when rep" data-act="pRepeat" data-id="${p.id}">↻ ${repText(p.repeat)}</button>` : ''}<span class="sp"></span>
+      ${s && !global ? `<span class="p-sub">${esc(s.name)}</span>` : ''}${whenHtml(p)}<span class="sp"></span>
       <span class="ic ${p.date?'':''}" title="Fecha">${I.cal}<input class="dt" type="date" data-id="${p.id}" value="${p.date||''}" aria-label="Fecha"></span>
       <button class="ic ${p.progress?'on':''}" data-act="pProgress" data-id="${p.id}" aria-label="Barra de progreso">${I.prog}</button>
       <button class="ic" data-act="pMenu" data-id="${p.id}" aria-label="Más opciones">${I.more}</button>
     </header>
-    <h2 class="p-title" contenteditable="plaintext-only" spellcheck="false" data-edit="title" data-id="${p.id}">${esc(p.title)}</h2>
+    <h2 class="p-title" contenteditable="plaintext-only" spellcheck="false" data-edit="title" data-id="${p.id}" data-ph="${s ? esc(s.name) : 'Título'}">${esc(p.title)}</h2>
     ${p.progress ? `<div class="bar"><i style="width:${t ? d/t*100 : 0}%"></i></div>` : ''}
     <div class="lines">
       <ul class="items" data-p="${p.id}">${p.items.map(itemHtml).join('')}</ul>
@@ -635,18 +690,29 @@ const A = {
   pProgress(id){ const p = P(id); p.progress = !p.progress; updatePaper(id); },
   pDelete(id){ hideMenu(); snap(); S.papers = S.papers.filter(p => p.id !== id); render(); toast(); },
   pMenu(id, b){ const r = b.getBoundingClientRect(); paperMenu(id, r.left, r.bottom); },
-  pRepeat(id, b){ const r = b.getBoundingClientRect(); repeatMenu(id, r.left, r.bottom); },
   pDup(id){ hideMenu(); dupPaper(id); },
+  pEmpty(id){ hideMenu(); snap(); P(id).items = []; updatePaper(id); toast(); },
+  pUncheck(id){ hideMenu(); P(id).items.forEach(x => x.done = false); updatePaper(id); },
+  iMenu(id, b){ const r = b.getBoundingClientRect(); itemMenu(id, r.right - 200, r.bottom); },
+  iCopy(id){ hideMenu(); copyItem(id); },
+  iPasteIn(id){ hideMenu(); pasteItem(id, true); },
+  iPasteBelow(id){ hideMenu(); pasteItem(id, false); },
+  iDate(id, b){ const r = b.getBoundingClientRect(); showMenu(itemDateHtml(id), r.left, r.bottom); },
+  iDateMenu(id){ menu.innerHTML = itemDateHtml(id); },
+  iQd(id, b){ const { it, p } = findItem(id); it.date = iso(addDays(+b.dataset.n)); hideMenu(); updatePaper(p.id); },
+  iDateClear(id){ const { it, p } = findItem(id); it.date = ''; hideMenu(); updatePaper(p.id); },
+  iRepeat(id, b){ const r = b.getBoundingClientRect(); showMenu(repeatHtml(id), r.left, r.bottom); },
+  iRepeatMenu(id){ menu.innerHTML = repeatHtml(id); },
   repDay(id, b){
-    const p = P(id), d = +b.dataset.d, cur = new Set(p.repeat?.days || []);
+    const { it } = findItem(id), d = +b.dataset.d, cur = new Set(it.repeat?.days || []);
     cur.has(d) ? cur.delete(d) : cur.add(d);
-    p.repeat = cur.size ? { days:[...cur] } : null; afterRepeat(p);
+    it.repeat = cur.size ? { days:[...cur] } : null; afterRepeat(id);
   },
   repEvery(id, b){
-    const p = P(id), n = Math.max(1, Math.min(60, (p.repeat?.every || 0) + +b.dataset.n));
-    p.repeat = { every:n, from:iso(addDays(0)) }; afterRepeat(p);
+    const { it } = findItem(id), n = Math.max(1, Math.min(60, (it.repeat?.every || 0) + +b.dataset.n));
+    it.repeat = { every:n, from:iso(addDays(0)) }; afterRepeat(id);
   },
-  repOff(id){ const p = P(id); p.repeat = null; p.lastReset = ''; hideMenu(); updatePaper(id); },
+  repOff(id){ const { it, p } = findItem(id); delete it.repeat; delete it.lastReset; hideMenu(); updatePaper(p.id); },
   iDup(id){ hideMenu(); dupItem(id); },
   iSubs(id){ hideMenu(); copySubs(id); },
   iDel(id){ hideMenu(); const { p, i } = findItem(id); if (!p) return; snap(); p.items.splice(i, blockEnd(p.items, i) - i); updatePaper(p.id); toast(); },
@@ -700,6 +766,7 @@ board.addEventListener('click', e => {
   e.preventDefault(); openDate(inp);
 });
 document.addEventListener('change', e => {
+  if (e.target.id === 'itemDate') { const { it, p } = findItem(e.target.dataset.id); if (it) { it.date = e.target.value || ''; hideMenu(); updatePaper(p.id); } return; }
   if (!e.target.matches?.('.dt')) return;
   const p = P(e.target.dataset.id); p.date = e.target.value || ''; updatePaper(p.id);
 });
@@ -723,21 +790,38 @@ function openMenu(sid, x, y){
   showMenu(`<button class="mi" data-act="renameSubject" data-id="${sid}">Renombrar</button><button class="mi danger" data-act="delSubject" data-id="${sid}">Eliminar asignatura</button>`, x, y);
 }
 function paperMenu(id, x, y){
-  showMenu(`<button class="mi" data-act="pRepeat" data-id="${id}">Repetir…</button><button class="mi" data-act="pDup" data-id="${id}">Duplicar papel</button><button class="mi danger" data-act="pDelete" data-id="${id}">Eliminar papel</button>`, x, y);
+  const p = P(id), any = p.items.length, anyDone = p.items.some(x => x.done);
+  showMenu(`<button class="mi" data-act="pDup" data-id="${id}">Duplicar papel</button>
+    ${anyDone ? `<button class="mi" data-act="pUncheck" data-id="${id}">Desmarcar todo</button>` : ''}
+    ${any ? `<button class="mi" data-act="pEmpty" data-id="${id}">Vaciar papel</button>` : ''}
+    <button class="mi danger" data-act="pDelete" data-id="${id}">Eliminar papel</button>`, x, y);
 }
-function repeatHtml(p){
-  const r = p.repeat || {}, days = r.days || [];
-  return `<div class="days">${['L','M','X','J','V','S','D'].map((l, k) => { const d = (k + 1) % 7; return `<button class="day ${days.includes(d)?'on':''}" data-act="repDay" data-id="${p.id}" data-d="${d}" aria-label="${DAYN[d]}">${l}</button>`; }).join('')}</div>
-    <div class="every ${r.every?'on':''}"><button data-act="repEvery" data-id="${p.id}" data-n="-1" aria-label="Menos">−</button><span>${r.every ? (r.every === 1 ? 'Cada día' : `Cada ${r.every} días`) : 'Cada N días'}</span><button data-act="repEvery" data-id="${p.id}" data-n="1" aria-label="Más">+</button></div>
-    ${p.repeat ? `<button class="mi" data-act="repOff" data-id="${p.id}">Sin repetición</button>` : `<p class="rep-hint">Las tareas se desmarcan solas ese día.</p>`}`;
+function repeatHtml(id){
+  const { it } = findItem(id), r = it.repeat || {}, days = r.days || [];
+  return `<div class="days">${['L','M','X','J','V','S','D'].map((l, k) => { const d = (k + 1) % 7; return `<button class="day ${days.includes(d)?'on':''}" data-act="repDay" data-id="${id}" data-d="${d}" aria-label="${DAYN[d]}">${l}</button>`; }).join('')}</div>
+    <div class="every ${r.every?'on':''}"><button data-act="repEvery" data-id="${id}" data-n="-1" aria-label="Menos">−</button><span>${r.every ? (r.every === 1 ? 'Cada día' : `Cada ${r.every} días`) : 'Cada N días'}</span><button data-act="repEvery" data-id="${id}" data-n="1" aria-label="Más">+</button></div>
+    ${it.repeat ? `<p class="rep-hint">${repText(it.repeat)}. Se desmarca sola ese día.</p><button class="mi" data-act="repOff" data-id="${id}">Sin repetición</button>` : `<p class="rep-hint">Esta tarea se desmarcará sola esos días.</p>`}`;
 }
-function repeatMenu(id, x, y){ showMenu(repeatHtml(P(id)), x, y); }
-function afterRepeat(p){ p.lastReset = lastResetDate(p.repeat) || ''; updatePaper(p.id); menu.innerHTML = repeatHtml(p); }
+function afterRepeat(id){ const { it, p } = findItem(id); it.lastReset = lastResetDate(it.repeat) || ''; updatePaper(p.id); menu.innerHTML = repeatHtml(id); }
+function itemDateHtml(id){
+  const { it } = findItem(id);
+  return `<div class="dwrap"><input class="pop-date" type="date" id="itemDate" data-id="${id}" value="${it.date||''}" aria-label="Fecha de la tarea"></div>
+    <div class="quick"><button data-act="iQd" data-id="${id}" data-n="0">Hoy</button><button data-act="iQd" data-id="${id}" data-n="1">Mañana</button><button data-act="iQd" data-id="${id}" data-n="7">+1 sem</button></div>
+    ${it.date ? `<button class="mi" data-act="iDateClear" data-id="${id}">Quitar fecha</button>` : ''}`;
+}
 function itemMenu(id, x, y){
   const { p, i, it } = findItem(id); if (!it) return;
-  const hasSubs = blockEnd(p.items, i) > i + 1, nt = bump(it.t);
+  const e = blockEnd(p.items, i), hasSubs = e > i + 1, nt = bump(it.t);
+  let sibs = 0;
+  if (hasSubs) { let ps = 0, pe = p.items.length; for (let k = i - 1; k >= 0; k--) if (p.items[k].lvl < it.lvl) { ps = k + 1; pe = blockEnd(p.items, k); break; } for (let k = ps; k < pe; k++) if (p.items[k].lvl === it.lvl && k !== i) sibs++; }
   showMenu(`<button class="mi" data-act="iDup" data-id="${id}">Duplicar${nt !== it.t ? ` como “${esc(nt)}”` : ''}</button>
-    ${hasSubs ? `<button class="mi" data-act="iSubs" data-id="${id}">Copiar sus subtareas a las demás</button>` : ''}
+    <button class="mi" data-act="iCopy" data-id="${id}">Copiar${hasSubs ? ' con sus subtareas' : ''}</button>
+    ${clip ? `<button class="mi" data-act="iPasteBelow" data-id="${id}">Pegar debajo</button>${it.lvl < MAXLVL ? `<button class="mi" data-act="iPasteIn" data-id="${id}">Pegar dentro</button>` : ''}` : ''}
+    ${hasSubs && sibs ? `<button class="mi" data-act="iSubs" data-id="${id}">Poner sus subtareas en las otras ${sibs}</button>` : ''}
+    <div class="msep"></div>
+    <button class="mi" data-act="iDateMenu" data-id="${id}">${it.date ? 'Cambiar fecha' : 'Poner fecha'}</button>
+    <button class="mi" data-act="iRepeatMenu" data-id="${id}">${it.repeat ? 'Repetición: ' + repText(it.repeat) : 'Repetir…'}</button>
+    <div class="msep"></div>
     <button class="mi danger" data-act="iDel" data-id="${id}">Eliminar</button>`, x, y);
 }
 function showMenu(html, x, y){
