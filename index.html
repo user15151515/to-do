@@ -149,8 +149,18 @@ body.dragging{user-select:none;-webkit-user-select:none;cursor:grabbing}
 .sync-txt span{color:var(--muted)}
 .sync-st{font-size:14px}
 .note{margin:0;color:var(--muted);font-size:15px}
-.round.warn{position:relative}
-.round.warn::after{content:"";position:absolute;top:6px;right:6px;width:7px;height:7px;border-radius:50%;background:var(--warn)}
+.cloud{color:var(--faint);position:relative}
+.cloud svg .ok,.cloud svg .x{display:none}
+.cloud[data-state="ok"] svg .ok{display:block}
+.cloud[data-state="ok"]{color:var(--muted)}
+.cloud[data-state="wait"] svg,.cloud[data-state="saving"] svg{animation:breathe 1.1s ease-in-out infinite}
+@keyframes breathe{50%{opacity:.35}}
+.cloud[data-state="offline"],.cloud[data-state="error"]{color:var(--warn)}
+.cloud[data-state="offline"] svg .x,.cloud[data-state="error"] svg .x{display:block}
+#syncbar{position:fixed;z-index:65;left:50%;transform:translateX(-50%);top:calc(12px + env(safe-area-inset-top,0px));display:flex;gap:14px;align-items:center;max-width:calc(100vw - 32px);background:var(--paper);color:var(--warn);box-shadow:0 0 0 1.5px var(--warn),var(--shadow);border-radius:12px;padding:10px 16px;font-size:14.5px}
+#syncbar button{all:unset;cursor:pointer;font-weight:600;white-space:nowrap}
+.code{font:14px ui-monospace,Menlo,monospace;color:var(--muted);word-break:break-all}
+.link-in{all:unset;box-sizing:border-box;flex:1;min-width:0;padding:9px 12px;border-radius:9px;box-shadow:inset 0 0 0 1px var(--line);font-size:15px}
 #toast{position:fixed;z-index:70;left:50%;transform:translateX(-50%);bottom:calc(22px + env(safe-area-inset-bottom,0px));background:var(--fg);color:var(--paper);border-radius:999px;box-shadow:var(--shadow)}
 #toast button{all:unset;cursor:pointer;font-size:15px;font-weight:500;padding:10px 20px;display:block}
 
@@ -167,6 +177,7 @@ body.dragging{user-select:none;-webkit-user-select:none;cursor:grabbing}
 <div class="wrap">
   <header class="top">
     <div class="pills" id="pills"></div>
+    <button class="round cloud" id="cloud" data-act="settings" hidden data-state="wait"><svg width="19" height="19" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6 15.5h8.5a3.5 3.5 0 0 0 .4-7A5 5 0 0 0 5.2 9.3 3.1 3.1 0 0 0 6 15.5Z"/><path class="ok" d="m7.8 11.6 1.7 1.6 3-3.2"/><path class="x" d="M3 3l14 14"/></svg></button>
     <button class="round" data-act="settings" aria-label="Ajustes"><svg width="17" height="17" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M2 4h7M13 4h1M2 12h1M7 12h7"/><circle cx="11" cy="4" r="1.8"/><circle cx="5" cy="12" r="1.8"/></svg></button>
     <button class="round new" data-act="newPaper" aria-label="Nuevo papel"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M8 3v10M3 8h10"/></svg></button>
   </header>
@@ -174,6 +185,7 @@ body.dragging{user-select:none;-webkit-user-select:none;cursor:grabbing}
 </div>
 <div id="sheet" hidden></div>
 <div id="toast" hidden></div>
+<div id="syncbar" hidden></div>
 <div id="menu" hidden></div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Sortable/1.15.2/Sortable.min.js"></script>
@@ -242,40 +254,88 @@ const FB = { apiKey:"AIzaSyDI5TNe9PeTHGjraciRTb-zqsxFzwz1wlQ", authDomain:"to-do
 const FBV = '10.12.2', SYNC_KEY = 'semestre.sync', DEV_KEY = 'semestre.dev';
 const lsGet = k => { try { return localStorage.getItem(k); } catch(e){ return null; } };
 const lsSet = (k,v) => { try { localStorage.setItem(k, v); } catch(e){} };
-const genCode = () => { const a = new Uint8Array(18); crypto.getRandomValues(a); return Array.from(a, b => 'abcdefghijkmnpqrstuvwxyz23456789'[b % 32]).join(''); };
-const DEV = lsGet(DEV_KEY) || (() => { const d = genCode().slice(0,10); lsSet(DEV_KEY, d); return d; })();
+const genCode = (n=24) => { const a = new Uint8Array(n); crypto.getRandomValues(a); return Array.from(a, b => 'abcdefghijkmnpqrstuvwxyz23456789'[b % 32]).join(''); };
+const DEV = lsGet(DEV_KEY) || (() => { const d = genCode(10); lsSet(DEV_KEY, d); return d; })();
 const canSync = window.self === window.top && /^https?:$/.test(location.protocol);
-let db = null, docRef = null, unsub = null, syncCode = null, pushT = null, pendingRemote = null, syncState = 'off', adopting = false;
+const validCode = c => typeof c === 'string' && /^[a-z0-9]{20,64}$/.test(c);
+let db = null, docRef = null, unsub = null, syncCode = null, pushT = null, retryT = null, pendingRemote = null, syncState = 'off', syncErr = '', lastOk = 0, adopting = false, dirty = false;
 const loadScript = src => new Promise((ok, ko) => { const el = document.createElement('script'); el.src = src; el.onload = ok; el.onerror = ko; document.head.appendChild(el); });
-function setSync(st){ syncState = st; document.querySelector('[data-act="settings"]')?.classList.toggle('warn', st === 'error'); const m = $('#syncMsg'); if (m) m.textContent = syncText(); }
-function syncText(){ return { ok:'Sincronizado', wait:'Conectando…', error:'Sin conexión. Se sincronizará al volver.', off:'' }[syncState] || ''; }
-function schedulePush(){ if (!docRef) return; clearTimeout(pushT); pushT = setTimeout(push, 600); }
+let stuckT = null;
+function setSync(st, err){
+  clearTimeout(stuckT);
+  if (st === 'wait' || st === 'saving') stuckT = setTimeout(() => setSync('error', 'el servidor no responde'), 12000);
+  if (st === 'ok') { lastOk = Date.now(); syncErr = ''; }
+  if (st === 'error') syncErr = err || syncErr;
+  if (!navigator.onLine && st !== 'off') st = 'offline';
+  syncState = st;
+  const c = $('#cloud'); if (c) { c.hidden = st === 'off'; c.dataset.state = st; c.setAttribute('aria-label', syncText()); c.title = syncText(); }
+  const bar = $('#syncbar');
+  if (bar) {
+    const show = st === 'error' || st === 'offline';
+    bar.hidden = !show;
+    if (show) bar.innerHTML = st === 'offline'
+      ? '<span>Sin conexión. Los cambios se guardan y se subirán al volver.</span>'
+      : `<span>No se está sincronizando${syncErr ? ` (${esc(syncErr)})` : ''}.</span><button data-act="retrySync">Reintentar</button>`;
+  }
+  const m = $('#syncMsg'); if (m) m.textContent = syncText();
+}
+function syncText(){
+  return { ok:'Sincronizado', saving:'Guardando…', wait:'Conectando…', offline:'Sin conexión', error:'Error de sincronización', off:'' }[syncState] || '';
+}
+const errMsg = e => (e && (e.code === 'permission-denied' ? 'permiso denegado por Firebase' : e.code === 'unavailable' ? 'servidor no disponible' : (e.code || e.message))) || 'error desconocido';
+function schedulePush(){ if (!docRef) return; dirty = true; setSync('saving'); clearTimeout(pushT); pushT = setTimeout(push, 400); }
 function push(){
   if (!docRef) return;
-  docRef.set({ data:lastData, updatedAt:S.updatedAt || Date.now(), device:DEV }).then(() => setSync('ok'), () => setSync('error'));
+  const at = S.updatedAt || Date.now();
+  docRef.set({ data:lastData, updatedAt:at, device:DEV }).then(() => {
+    if ((S.updatedAt || 0) <= at) { dirty = false; setSync('ok'); }
+  }, e => { setSync('error', errMsg(e)); clearTimeout(retryT); retryT = setTimeout(push, 6000); });
 }
 function applyRemote(r){
-  if (document.activeElement?.isContentEditable || drag) { pendingRemote = r; return; }
+  if (drag) { pendingRemote = r; return; }
   pendingRemote = null;
-  try {
-    const d = JSON.parse(r.data);
-    S.subjects = d.subjects || []; S.papers = d.papers || []; S.updatedAt = r.updatedAt;
-    lastData = dataStr(); render();
-  } catch(e){}
+  let d; try { d = JSON.parse(r.data); } catch(e){ return; }
+  // keep whatever is being typed right now, and the caret position
+  const a = document.activeElement, ed = a?.isContentEditable && a.dataset.edit ? a : null;
+  let keep = null;
+  if (ed) {
+    let off = 0; const sel = getSelection();
+    if (sel.rangeCount && ed.contains(sel.anchorNode)) { const rg = sel.getRangeAt(0).cloneRange(); rg.selectNodeContents(ed); rg.setEnd(sel.anchorNode, sel.anchorOffset); off = rg.toString().length; }
+    keep = { kind:ed.dataset.edit, id:ed.dataset.id, text:ed.textContent, off };
+  }
+  S.subjects = d.subjects || []; S.papers = d.papers || []; S.updatedAt = r.updatedAt;
+  let localWins = false;
+  if (keep) {
+    if (keep.kind === 'title') { const p = P(keep.id); if (p && p.title !== keep.text) { p.title = keep.text; localWins = true; } }
+    else { const f = findItem(keep.id); if (f.it && f.it.t !== keep.text) { f.it.t = keep.text; localWins = true; } }
+  }
+  lastData = localWins ? '' : dataStr();
+  try { localStorage.setItem(KEY, JSON.stringify(S)); } catch(e){}
+  render();
+  if (keep) {
+    const el = document.querySelector(`[data-edit="${keep.kind}"][data-id="${keep.id}"]`);
+    if (el) {
+      el.focus();
+      const t = el.firstChild, off = Math.min(keep.off, el.textContent.length), rg = document.createRange();
+      if (t && t.nodeType === 3) { rg.setStart(t, off); rg.collapse(true); } else { rg.selectNodeContents(el); rg.collapse(false); }
+      const sel = getSelection(); sel.removeAllRanges(); sel.addRange(rg);
+    }
+  }
 }
 function listen(){
-  unsub && unsub();
+  unsub && unsub(); clearTimeout(retryT);
   docRef = db.collection('boards').doc(syncCode);
   setSync('wait');
-  unsub = docRef.onSnapshot({ includeMetadataChanges:false }, snap => {
-    if (snap.metadata.hasPendingWrites || snap.metadata.fromCache) return;
+  unsub = docRef.onSnapshot(snap => {
+    if (snap.metadata.hasPendingWrites) return;
+    if (snap.metadata.fromCache) { if (!navigator.onLine) setSync('offline'); return; }
     const adopt = adopting; adopting = false;
     if (!snap.exists) { push(); return; }
-    const r = snap.data();
-    if (adopt || (r.updatedAt || 0) > (S.updatedAt || 0)) { if (r.device !== DEV || adopt || r.data !== lastData) applyRemote(r); }
-    else if ((r.updatedAt || 0) < (S.updatedAt || 0)) push();
-    setSync('ok');
-  }, () => setSync('error'));
+    const r = snap.data(), ru = r.updatedAt || 0, lu = S.updatedAt || 0;
+    if (adopt || ru > lu) { if (r.data !== lastData) applyRemote(r); else S.updatedAt = ru; if (!dirty) setSync('ok'); }
+    else if (ru < lu) push();
+    else if (!dirty) setSync('ok');
+  }, e => { setSync('error', errMsg(e)); retryT = setTimeout(listen, 6000); });
 }
 function useCode(code, adopt){
   syncCode = code; adopting = !!adopt; lsSet(SYNC_KEY, code);
@@ -283,15 +343,16 @@ function useCode(code, adopt){
 }
 function startSync(){
   if (!canSync) return;
-  const m = location.hash.match(/k=([a-z0-9]{20,})/i);
-  if (m) { syncCode = m[1]; adopting = true; lsSet(SYNC_KEY, syncCode); history.replaceState(null, '', location.pathname + location.search); }
-  else { syncCode = lsGet(SYNC_KEY); if (!syncCode) { syncCode = genCode(); lsSet(SYNC_KEY, syncCode); } }
+  const m = location.hash.match(/k=([a-z0-9]{20,64})/i);
+  if (m) { syncCode = m[1].toLowerCase(); adopting = true; lsSet(SYNC_KEY, syncCode); history.replaceState(null, '', location.pathname + location.search); }
+  else { syncCode = lsGet(SYNC_KEY); if (!validCode(syncCode)) { syncCode = genCode(); lsSet(SYNC_KEY, syncCode); } }
   setSync('wait');
   const base = `https://cdn.jsdelivr.net/npm/firebase@${FBV}/`;
   loadScript(base + 'firebase-app-compat.js').then(() => loadScript(base + 'firebase-firestore-compat.js')).then(() => {
     firebase.initializeApp(FB); db = firebase.firestore(); listen();
-  }).catch(() => setSync('error'));
-  window.addEventListener('online', () => { if (db) push(); });
+  }).catch(() => setSync('error', 'no se pudo cargar Firebase'));
+  window.addEventListener('online', () => { setSync(dirty ? 'saving' : 'wait'); if (db) { listen(); if (dirty) push(); } });
+  window.addEventListener('offline', () => setSync('offline'));
 }
 function linkUrl(){ return `${location.origin}${location.pathname}#k=${syncCode}`; }
 
@@ -472,9 +533,10 @@ function openSheet(){
     <button class="switch ${S.sound?'on':''}" data-act="toggleSound"><b></b>Sonido</button>
     ${canSync && syncCode ? `<div class="sync">
       <div id="qr" class="qr"></div>
-      <div class="sync-txt"><strong>Abre esto en el móvil</strong><span>Escanéalo con la cámara y tendrás la misma mesa, sincronizada.</span><span id="syncMsg" class="sync-st">${syncText()}</span>
+      <div class="sync-txt"><strong>Abre esto en el móvil</strong><span>Escanéalo con la cámara y tendrás la misma mesa, sincronizada.</span><span id="syncMsg" class="sync-st">${syncText()}</span><span class="code">${syncCode}</span>
       <div class="row"><button class="btn ghostb" data-act="copyLink">Copiar enlace</button></div></div>
-    </div>` : `<p class="note">La sincronización entre dispositivos funciona en la versión publicada en GitHub Pages.</p>`}
+    </div>
+    <div class="row"><input class="link-in" id="linkIn" placeholder="Pega aquí un enlace o código para vincular" autocomplete="off"><button class="btn ghostb" data-act="linkDevice">Vincular</button></div>` : `<p class="note">La sincronización entre dispositivos funciona en la versión publicada en GitHub Pages.</p>`}
     <textarea id="bk" aria-label="Copia de seguridad">${esc(JSON.stringify({ v:2, subjects:S.subjects, papers:S.papers }))}</textarea>
     <div class="row"><button class="btn ghostb" data-act="copyBk" id="copyBtn">Copiar</button>${standalone ? '<button class="btn ghostb" data-act="dlBk">Descargar</button>' : ''}<button class="btn ghostb" data-act="restore" id="restoreBtn">Restaurar lo pegado</button></div>
     <div class="row"><button class="btn danger" data-act="wipe">Borrar todo</button><span class="sp"></span><button class="btn" data-act="closeSheet">Listo</button></div>
@@ -510,6 +572,12 @@ const A = {
   settings(){ openSheet(); },
   closeSheet(){ $('#sheet').hidden = true; },
   toggleSound(_, b){ S.sound = !S.sound; b.classList.toggle('on', S.sound); save(); if (S.sound) sound('check'); },
+  retrySync(){ if (!db) { startSync(); return; } listen(); if (dirty) push(); },
+  linkDevice(){
+    const v = ($('#linkIn')?.value || '').trim(), m = v.match(/([a-z0-9]{20,64})\s*$/i);
+    if (!m) { $('#linkIn').value = ''; $('#linkIn').placeholder = 'Ese código no es válido'; return; }
+    useCode(m[1].toLowerCase(), true); $('#sheet').hidden = true;
+  },
   copyLink(_, b){ try { navigator.clipboard.writeText(linkUrl()).then(() => b.textContent = 'Copiado', () => b.textContent = linkUrl()); } catch(e){ b.textContent = linkUrl(); } },
   copyBk(_, b){
     const ta = $('#bk'); const ok = () => b.textContent = 'Copiado', fb = () => { ta.focus(); ta.select(); };
@@ -650,7 +718,6 @@ document.addEventListener('input', e => {
 });
 document.addEventListener('focusout', e => {
   const el = e.target;
-  if (pendingRemote && el.isContentEditable) setTimeout(() => { if (pendingRemote && !document.activeElement?.isContentEditable) applyRemote(pendingRemote); }, 50);
   if (el.matches?.('[data-edit="item"]')) {
     const v = el.textContent.replace(/\s+/g,' ').trim();
     if (!v) removeItem(el.dataset.id, false); else { const r = findItem(el.dataset.id); if (r.it) { r.it.t = v; save(); } }
