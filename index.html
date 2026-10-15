@@ -68,8 +68,9 @@ body.dragging{user-select:none;-webkit-user-select:none;cursor:grabbing}
 .ghost{position:fixed;left:0;top:0;z-index:80;pointer-events:none;box-shadow:var(--shadow);background:var(--paper);color:var(--fg)}
 
 /* Sheets */
-.board{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(300px,100%),1fr));column-gap:22px;grid-auto-rows:1px;align-items:start}
-.board>*{margin-bottom:22px}
+.board{display:flex;gap:22px;align-items:flex-start}
+.col{flex:1 1 0;min-width:0;display:flex;flex-direction:column;gap:22px;min-height:160px;padding-bottom:40px}
+.board>.empty{flex:0 1 300px}
 .paper{position:relative;background:var(--paper);border-radius:4px 4px 6px 6px;box-shadow:var(--sheet);padding:14px 16px 6px 32px;min-width:0;transition:box-shadow .15s,transform .15s}
 .paper::before{content:"";position:absolute;left:19px;top:0;bottom:0;width:2px;background:var(--c,var(--nosub));transition:background .25s,width .2s}
 .paper.has-sub::before{width:3px}
@@ -465,7 +466,13 @@ function render(){
   if (S.filter !== 'all' && !subj(S.filter)) S.filter = 'all';
   renderPills();
   const ps = visible();
-  board.innerHTML = ps.length ? ps.map(paperHtml).join('') : `<button class="empty" data-act="newPaper" aria-label="Nuevo papel">+</button>`;
+  if (!ps.length) board.innerHTML = `<button class="empty" data-act="newPaper" aria-label="Nuevo papel">+</button>`;
+  else {
+    const n = nCols(), cols = Array.from({ length:n }, () => []);
+    ps.forEach((p, k) => { if (p.col == null) p.col = k % 3; cols[n === 1 ? 0 : p.col % n].push(p); });
+    board.innerHTML = cols.map((c, k) => `<div class="col" data-col="${k}">${c.map(paperHtml).join('')}</div>`).join('');
+  }
+  lastCols = nCols();
   bindAll(); save(); applyFocus();
 }
 function renderPills(){
@@ -620,7 +627,7 @@ function updatePaper(id){
   if (!p || !el) return;
   const tmp = document.createElement('div'); tmp.innerHTML = paperHtml(p);
   const fresh = tmp.firstElementChild; el.replaceWith(fresh);
-  bindItems(fresh.querySelector('.items')); fitCell(fresh); fitRO.observe(fresh); save(); applyFocus();
+  bindItems(fresh.querySelector('.items')); save(); applyFocus();
 }
 function refreshMeta(p){
   const el = board.querySelector(`.paper[data-id="${p.id}"]`); if (!el) return;
@@ -643,18 +650,18 @@ function applyFocus(){
 }
 
 /* ---------- reorder ---------- */
-const fitRO = new ResizeObserver(es => { for (const e of es) fitCell(e.target); });
-function fitCell(el){ el.style.gridRowEnd = 'span ' + Math.max(1, Math.ceil(el.getBoundingClientRect().height + 22)); }
-function watchCells(){ board.querySelectorAll(':scope > *').forEach(el => { fitCell(el); fitRO.observe(el); }); }
+/* free columns: each sheet remembers its column; the number of columns follows the screen width */
+let lastCols = 0;
+function nCols(){ const w = board.clientWidth || innerWidth; return Math.max(1, Math.floor((w + 22) / (300 + 22))); }
+window.addEventListener('resize', () => { if (nCols() !== lastCols && !document.activeElement?.isContentEditable) render(); });
 function bindAll(){
-  watchCells();
   if (!window.Sortable) return;
-  Sortable.get(board)?.destroy();
-  Sortable.create(board, { handle:'.p-grip', draggable:'.paper', animation:180, onEnd(){
-    const ids = [...board.querySelectorAll('.paper')].map(x => x.dataset.id), set = new Set(ids);
-    const slots = []; S.papers.forEach((p,i) => set.has(p.id) && slots.push(i));
+  board.querySelectorAll('.col').forEach(col => Sortable.create(col, { group:'papers', handle:'.p-grip', draggable:'.paper', animation:180, onEnd(){
+    const multi = board.querySelectorAll('.col').length > 1, ids = [];
+    board.querySelectorAll('.col').forEach(c => c.querySelectorAll(':scope > .paper').forEach(el => { ids.push(el.dataset.id); if (multi) P(el.dataset.id).col = +c.dataset.col; }));
+    const set = new Set(ids), slots = []; S.papers.forEach((p, i) => set.has(p.id) && slots.push(i));
     const moved = ids.map(P); slots.forEach((slot, k) => S.papers[slot] = moved[k]); save();
-  }});
+  }}));
   board.querySelectorAll('.items').forEach(bindItems);
 }
 function bindItems(ul){
@@ -799,7 +806,7 @@ $('#sheet').addEventListener('click', e => { if (e.target.id === 'sheet') $('#sh
 const A = {
   filter(id){ S.filter = id; render(); },
   newPaper(){
-    const p = { id:uid(), title:'', subject:S.filter !== 'all' ? S.filter : '', date:'', progress:false, items:[] };
+    const p = { id:uid(), title:'', subject:S.filter !== 'all' ? S.filter : '', date:'', progress:false, items:[], col:0 };
     S.papers.unshift(p); pendingFocus = { sel:`[data-edit="title"][data-id="${p.id}"]` }; render(); window.scrollTo({ top:0, behavior:'smooth' });
   },
   addHere(pid){
