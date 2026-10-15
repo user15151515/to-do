@@ -1,0 +1,703 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-180.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Semestre">
+<style>:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}</style>
+<title>Semestre</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<meta name="theme-color" content="#eef0f2" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0f1113" media="(prefers-color-scheme: dark)">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&display=swap">
+<style>
+/* Layout: a desk of ruled sheets; subjects are coloured pills you drag onto a sheet, its margin line takes the colour */
+:root{
+  --desk:#eef0f2; --paper:#ffffff; --fg:#16181b; --muted:#6b7178; --faint:#b0b5bb;
+  --rule:#eaedf0; --line:#e1e4e8; --hover:#f1f3f5; --warn:#c2410c; --nosub:#dde1e5;
+  --ui:"Geist",ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif;
+  --sheet:0 1px 2px rgba(20,24,30,.06),0 4px 14px rgba(20,24,30,.05);
+  --shadow:0 12px 34px rgba(20,24,30,.16);
+  --lh:32px;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --desk:#0f1113; --paper:#181b1e; --fg:#e7e9ec; --muted:#959ca5; --faint:#565d65;
+  --rule:#22262a; --line:#2a2e33; --hover:#1f2327; --warn:#fb923c; --nosub:#353a40;
+  --sheet:0 1px 2px rgba(0,0,0,.4),0 6px 18px rgba(0,0,0,.25); --shadow:0 12px 34px rgba(0,0,0,.6); color-scheme:dark}}
+:root[data-theme="dark"]{
+  --desk:#0f1113; --paper:#181b1e; --fg:#e7e9ec; --muted:#959ca5; --faint:#565d65;
+  --rule:#22262a; --line:#2a2e33; --hover:#1f2327; --warn:#fb923c; --nosub:#353a40;
+  --sheet:0 1px 2px rgba(0,0,0,.4),0 6px 18px rgba(0,0,0,.25); --shadow:0 12px 34px rgba(0,0,0,.6); color-scheme:dark}
+
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+body{margin:0;background:var(--desk);color:var(--fg);font:16px/1.45 var(--ui);-webkit-font-smoothing:antialiased;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+button{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--fg);outline-offset:2px;border-radius:6px}
+svg{display:block}
+.wrap{max-width:1240px;margin:0 auto;padding-block:22px 140px}
+body.dragging{user-select:none;-webkit-user-select:none;cursor:grabbing}
+
+/* Top: subject pills + two icons */
+.top{display:flex;align-items:flex-start;gap:12px;margin-bottom:28px}
+.pills{flex:1;min-width:0;display:flex;flex-wrap:wrap;gap:6px}
+.pill{all:unset;box-sizing:border-box;display:inline-flex;align-items:center;gap:8px;height:34px;padding:0 14px;border-radius:999px;font-size:15px;color:var(--muted);cursor:pointer;white-space:nowrap;touch-action:none;user-select:none;-webkit-user-select:none}
+.pill:hover{color:var(--fg);background:var(--hover)}
+.pill.on{background:var(--paper);color:var(--fg);box-shadow:var(--sheet)}
+.pill:focus-visible{outline:2px solid var(--fg)}
+.pill .dot{width:9px;height:9px;border-radius:50%;background:var(--c);flex:none}
+.pill.editing{background:var(--paper);color:var(--fg);box-shadow:0 0 0 1.5px var(--c);cursor:text;user-select:text;-webkit-user-select:text}
+.pill.editing .dot{cursor:pointer;width:14px;height:14px}
+.pill .name{outline:none;min-width:1ch}
+.pill.add{width:34px;padding:0;justify-content:center;color:var(--faint);font-size:20px;font-weight:300}
+.pill.add:hover{color:var(--fg)}
+.round{all:unset;box-sizing:border-box;width:34px;height:34px;display:grid;place-items:center;border-radius:50%;color:var(--muted);cursor:pointer;flex:none}
+.round:hover{background:var(--hover);color:var(--fg)}
+.round.new{background:var(--fg);color:var(--desk)}
+.round.new:hover{opacity:.88;background:var(--fg);color:var(--desk)}
+.round:focus-visible{outline:2px solid var(--fg);outline-offset:2px}
+.ghost{position:fixed;left:0;top:0;z-index:80;pointer-events:none;box-shadow:var(--shadow);background:var(--paper);color:var(--fg)}
+
+/* Sheets */
+.board{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(300px,100%),1fr));gap:22px;align-items:start}
+.paper{position:relative;background:var(--paper);border-radius:4px 4px 6px 6px;box-shadow:var(--sheet);padding:14px 16px 6px 32px;min-width:0;transition:box-shadow .15s,transform .15s}
+.paper::before{content:"";position:absolute;left:19px;top:0;bottom:0;width:2px;background:var(--c,var(--nosub));transition:background .25s,width .2s}
+.paper.has-sub::before{width:3px}
+.paper.drop{box-shadow:0 0 0 2px var(--dc),var(--shadow);transform:translateY(-2px)}
+.paper.complete{opacity:.7}
+.paper.complete:hover,.paper.complete:focus-within{opacity:1}
+.p-grip{position:absolute;top:2px;left:50%;transform:translateX(-50%);color:var(--faint);cursor:grab;padding:3px 12px;opacity:0;transition:opacity .15s;touch-action:none}
+.paper:hover .p-grip{opacity:1}
+@media (hover:none){.p-grip{opacity:.6}}
+.p-head{display:flex;align-items:center;gap:2px;min-height:30px}
+.p-head .sp{flex:1}
+.when{all:unset;cursor:pointer;font-size:14px;color:var(--muted);padding:2px 6px;margin-left:-6px;border-radius:6px}
+.when:hover{background:var(--hover);color:var(--fg)}
+.when.soon,.when.late{color:var(--warn)}
+.ic{all:unset;box-sizing:border-box;width:30px;height:30px;display:grid;place-items:center;border-radius:8px;color:var(--faint);cursor:pointer;opacity:0;transition:opacity .15s;position:relative}
+.ic:hover{background:var(--hover);color:var(--fg)}
+.ic.on{opacity:1;color:var(--fg)}
+.ic:focus-visible{opacity:1;outline:2px solid var(--fg)}
+.paper:hover .ic,.paper:focus-within .ic{opacity:1}
+@media (hover:none){.ic{opacity:.75}}
+.dt{position:absolute;inset:0;opacity:0;width:100%;height:100%;border:0;padding:0;cursor:pointer}
+.dt.show{position:static;opacity:1;width:auto;height:30px;font:14px var(--ui);color:var(--fg);background:var(--hover);border-radius:6px;padding:0 6px}
+.ic.reveal{width:auto;opacity:1}
+.p-title{font-size:20px;line-height:1.3;font-weight:600;letter-spacing:-.015em;margin:2px 0 10px;outline:none;border-radius:6px;padding:2px 4px;margin-left:-4px;overflow-wrap:anywhere;text-wrap:balance}
+.p-title:focus{background:var(--hover)}
+.p-title:empty::before{content:"Título";color:var(--faint);font-weight:500}
+.bar{height:4px;border-radius:4px;background:var(--rule);overflow:hidden;margin:0 0 10px}
+.bar i{display:block;height:100%;border-radius:4px;background:var(--c,var(--fg));transition:width .4s cubic-bezier(.3,.7,.3,1)}
+
+.lines{background-image:repeating-linear-gradient(to bottom,transparent 0 calc(var(--lh) - 1px),var(--rule) calc(var(--lh) - 1px) var(--lh))}
+.items{list-style:none;margin:0;padding:0;min-height:1px}
+.it{display:grid;grid-template-columns:22px minmax(0,1fr) 26px;column-gap:6px;align-items:start;padding-left:calc(var(--lvl,0) * 24px);line-height:var(--lh);touch-action:pan-y;transition:padding-left .18s ease}
+.bullet{color:var(--faint);cursor:pointer;touch-action:none;user-select:none;-webkit-user-select:none;text-align:center;transition:color .15s,transform .15s;border-radius:6px}
+.bullet:hover{color:var(--fg);background:var(--hover)}
+.it-text{outline:none;min-width:0;overflow-wrap:anywhere;border-radius:4px;padding:0 4px;margin-left:-4px;transition:color .25s}
+.it-text:focus{background:var(--hover)}
+.it.done .it-text{color:var(--faint);text-decoration:line-through;text-decoration-thickness:1px}
+.it.done .bullet{color:var(--line)}
+.cb{all:unset;cursor:pointer;width:18px;height:18px;margin-top:7px;border:1.5px solid var(--faint);border-radius:5px;display:grid;place-items:center;justify-self:end;transition:background .15s,border-color .15s}
+.cb:hover{border-color:var(--fg)}
+.cb:focus-visible{outline:2px solid var(--fg);outline-offset:2px}
+.cb svg{color:var(--paper)}
+.cb svg path{stroke-dasharray:14;stroke-dashoffset:14;transition:stroke-dashoffset .22s ease-out .05s}
+.it.done .cb{background:var(--c,var(--fg));border-color:var(--c,var(--fg))}
+.it.done .cb svg path{stroke-dashoffset:0}
+.it.pop .cb{animation:pop .32s cubic-bezier(.3,1.6,.5,1)}
+@keyframes pop{0%{transform:scale(1)}40%{transform:scale(1.3)}100%{transform:scale(1)}}
+.blank{height:calc(var(--lh) * 2);cursor:text}
+.sortable-ghost{opacity:.3}
+.paper.sortable-chosen{box-shadow:var(--shadow)}
+.empty{all:unset;box-sizing:border-box;cursor:pointer;border:1.5px dashed var(--line);border-radius:6px;min-height:200px;display:grid;place-items:center;color:var(--faint);font-size:36px;font-weight:300}
+.empty:hover{color:var(--fg);border-color:var(--faint)}
+
+/* Sheet & toast */
+#sheet{position:fixed;inset:0;z-index:60;background:rgba(10,12,15,.35);display:grid;place-items:center;padding:16px}
+.sheet-card{background:var(--paper);border-radius:14px;box-shadow:var(--shadow);width:min(440px,100%);max-height:calc(100vh - 32px);overflow:auto;padding:22px;display:flex;flex-direction:column;gap:14px}
+.sheet-card textarea{width:100%;min-height:64px;resize:vertical;font:13px/1.4 ui-monospace,Menlo,monospace;color:var(--fg);background:var(--desk);border:1px solid var(--line);border-radius:8px;padding:8px}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.row .sp{flex:1}
+.btn{all:unset;cursor:pointer;box-sizing:border-box;font-size:15px;font-weight:500;padding:9px 14px;border-radius:9px;background:var(--fg);color:var(--paper)}
+.btn.ghostb{background:transparent;color:var(--fg);box-shadow:inset 0 0 0 1px var(--line)}
+.btn.ghostb:hover{background:var(--hover)}
+.btn.danger{background:transparent;color:var(--warn);box-shadow:inset 0 0 0 1px var(--line)}
+.switch{all:unset;cursor:pointer;display:flex;align-items:center;gap:12px;font-size:15px;padding:4px 0}
+.switch b{width:34px;height:20px;border-radius:10px;background:var(--line);position:relative;transition:background .15s;flex:none}
+.switch b::after{content:"";position:absolute;top:2px;left:2px;width:16px;height:16px;border-radius:50%;background:var(--paper);transition:transform .15s;box-shadow:0 1px 2px rgba(0,0,0,.25)}
+.switch.on b{background:var(--fg)}
+.switch.on b::after{transform:translateX(14px)}
+.p-sub{font-size:13.5px;font-weight:500;color:var(--c);margin-right:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:55%}
+#menu{position:fixed;z-index:90;background:var(--paper);border:1px solid var(--line);border-radius:12px;box-shadow:var(--shadow);padding:4px;min-width:180px}
+.mi{all:unset;display:block;width:100%;box-sizing:border-box;padding:9px 12px;border-radius:8px;cursor:pointer;font-size:15px}
+.mi:hover,.mi:focus-visible{background:var(--hover);outline:none}
+.mi.danger{color:var(--warn)}
+.sync{display:flex;gap:16px;align-items:center;flex-wrap:wrap}
+.qr{width:132px;height:132px;flex:none;background:#fff;border-radius:10px;padding:6px}
+.qr svg{width:100%;height:100%}
+.sync-txt{flex:1;min-width:180px;display:flex;flex-direction:column;gap:6px;font-size:15px}
+.sync-txt span{color:var(--muted)}
+.sync-st{font-size:14px}
+.note{margin:0;color:var(--muted);font-size:15px}
+.round.warn{position:relative}
+.round.warn::after{content:"";position:absolute;top:6px;right:6px;width:7px;height:7px;border-radius:50%;background:var(--warn)}
+#toast{position:fixed;z-index:70;left:50%;transform:translateX(-50%);bottom:calc(22px + env(safe-area-inset-bottom,0px));background:var(--fg);color:var(--paper);border-radius:999px;box-shadow:var(--shadow)}
+#toast button{all:unset;cursor:pointer;font-size:15px;font-weight:500;padding:10px 20px;display:block}
+
+@media (max-width:760px){
+  .wrap{padding-block:14px 140px}
+  .top{margin-bottom:18px}
+  .paper{padding-right:12px}
+}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+</style>
+
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <div class="pills" id="pills"></div>
+    <button class="round" data-act="settings" aria-label="Ajustes"><svg width="17" height="17" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M2 4h7M13 4h1M2 12h1M7 12h7"/><circle cx="11" cy="4" r="1.8"/><circle cx="5" cy="12" r="1.8"/></svg></button>
+    <button class="round new" data-act="newPaper" aria-label="Nuevo papel"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M8 3v10M3 8h10"/></svg></button>
+  </header>
+  <main class="board" id="board"></main>
+</div>
+<div id="sheet" hidden></div>
+<div id="toast" hidden></div>
+<div id="menu" hidden></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Sortable/1.15.2/Sortable.min.js"></script>
+<script>
+(() => {
+const $ = s => document.querySelector(s);
+const COLORS = ['#5b7cfa','#e07a5f','#3d9a74','#c49a1c','#9b6bd6','#d0607f','#3e9db3','#7d848c'];
+const KEY = 'semestre.v2', OLD = 'semestre.v1', MAXLVL = 2;
+const uid = () => Math.random().toString(36).slice(2,10);
+const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const iso = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+const addDays = n => { const d = new Date(); d.setHours(0,0,0,0); d.setDate(d.getDate()+n); return d; };
+const parse = s => { const [y,m,d] = s.split('-').map(Number); return new Date(y,m-1,d); };
+const days = s => Math.round((parse(s) - addDays(0)) / 864e5);
+const rel = n => n===0?'Hoy':n===1?'Mañana':n===-1?'Ayer':n>1?(n<14?`En ${n} días`:`En ${Math.round(n/7)} semanas`):(n>-14?`Hace ${-n} días`:`Hace ${Math.round(-n/7)} semanas`);
+const fmtLong = s => parse(s).toLocaleDateString('es',{weekday:'long',day:'numeric',month:'long'});
+
+const I = {
+  grip:'<svg width="18" height="6" viewBox="0 0 18 6" fill="currentColor"><circle cx="3" cy="1.5" r="1.2"/><circle cx="9" cy="1.5" r="1.2"/><circle cx="15" cy="1.5" r="1.2"/><circle cx="3" cy="4.8" r="1.2"/><circle cx="9" cy="4.8" r="1.2"/><circle cx="15" cy="4.8" r="1.2"/></svg>',
+  cal:'<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><rect x="2.5" y="3.5" width="11" height="10" rx="2"/><path d="M2.5 6.5h11M5.5 2v3M10.5 2v3"/></svg>',
+  prog:'<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><rect x="2" y="6" width="12" height="4" rx="2"/><path d="M4 8h4" stroke-width="2"/></svg>',
+  trash:'<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 4.5h11M6.5 4.5V3h3v1.5M4 4.5l.7 8.6a1 1 0 0 0 1 .9h4.6a1 1 0 0 0 1-.9l.7-8.6"/></svg>',
+  check:'<svg width="11" height="11" viewBox="0 0 11 11" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 5.8 4.4 8.2 9 3"/></svg>',
+};
+
+/* ---------- state ---------- */
+const It = (t, lvl=0, done=false) => ({ id:uid(), t, lvl, done });
+function seed(){
+  const sc = { id:uid(), name:'Cálculo', color:COLORS[0] }, sm = { id:uid(), name:'Micro', color:COLORS[2] }, sa = { id:uid(), name:'Arte', color:COLORS[1] };
+  return { v:2, sound:true, filter:'all', subjects:[sc, sm, sa], papers:[
+    { id:uid(), title:'Parcial de integrales', subject:sc.id, date:iso(addDays(9)), progress:true, items:[
+      It('Integración por partes',0,true), It('Teoría',1,true), It('Ejercicios',1,true),
+      It('Cambio de variable'), It('Hoja 4',1), It('Examen del año pasado') ]},
+    { id:uid(), title:'Problem set 2', subject:sm.id, date:iso(addDays(3)), progress:false, items:[
+      It('Preguntas 1 a 4',0,true), It('Pregunta 5'), It('Entregar') ]},
+    { id:uid(), title:'Trabajo Barroco', subject:sa.id, date:'', progress:false, items:[
+      It('Elegir obras'), It('Caravaggio',1), It('Bernini',1), It('Bibliografía') ]},
+    { id:uid(), title:'Esta semana', subject:'', date:'', progress:false, items:[ It('Pedir tutoría'), It('Imprimir apuntes',0,true) ]},
+  ]};
+}
+function migrate(o){
+  if (!o || !Array.isArray(o.subjects)) return null;
+  const papers = [];
+  o.subjects.forEach(s => (s.events||[]).forEach(e => papers.push({ id:e.id, title:e.title, subject:s.id, date:e.date||'', progress:false, items:(e.tasks||[]).map(t => ({ id:t.id, t:t.t, lvl:0, done:!!t.done })) })));
+  return { v:2, sound:true, filter:'all', subjects:o.subjects.map(s => ({ id:s.id, name:s.name, color:s.color })), papers };
+}
+function load(){
+  try {
+    const r = localStorage.getItem(KEY); if (r) return JSON.parse(r);
+    const o = localStorage.getItem(OLD); if (o) return migrate(JSON.parse(o));
+  } catch(e){}
+  return null;
+}
+let S = load();
+if (!S || !Array.isArray(S.papers)) S = seed();
+const dataStr = () => JSON.stringify({ subjects:S.subjects, papers:S.papers });
+let lastData = dataStr();
+let saveT; const save = () => { clearTimeout(saveT); saveT = setTimeout(() => {
+  const d = dataStr();
+  if (d !== lastData) { lastData = d; S.updatedAt = Date.now(); schedulePush(); }
+  try { localStorage.setItem(KEY, JSON.stringify(S)); } catch(e){}
+}, 120); };
+
+/* ---------- sync (Firebase Firestore, one document per board, keyed by a long random code) ---------- */
+const FB = { apiKey:"AIzaSyDI5TNe9PeTHGjraciRTb-zqsxFzwz1wlQ", authDomain:"to-do-d35e2.firebaseapp.com", projectId:"to-do-d35e2", storageBucket:"to-do-d35e2.firebasestorage.app", messagingSenderId:"21733568444", appId:"1:21733568444:web:4c03a8c1cdec49c6f945b9" };
+const FBV = '10.12.2', SYNC_KEY = 'semestre.sync', DEV_KEY = 'semestre.dev';
+const lsGet = k => { try { return localStorage.getItem(k); } catch(e){ return null; } };
+const lsSet = (k,v) => { try { localStorage.setItem(k, v); } catch(e){} };
+const genCode = () => { const a = new Uint8Array(18); crypto.getRandomValues(a); return Array.from(a, b => 'abcdefghijkmnpqrstuvwxyz23456789'[b % 32]).join(''); };
+const DEV = lsGet(DEV_KEY) || (() => { const d = genCode().slice(0,10); lsSet(DEV_KEY, d); return d; })();
+const canSync = window.self === window.top && /^https?:$/.test(location.protocol);
+let db = null, docRef = null, unsub = null, syncCode = null, pushT = null, pendingRemote = null, syncState = 'off', adopting = false;
+const loadScript = src => new Promise((ok, ko) => { const el = document.createElement('script'); el.src = src; el.onload = ok; el.onerror = ko; document.head.appendChild(el); });
+function setSync(st){ syncState = st; document.querySelector('[data-act="settings"]')?.classList.toggle('warn', st === 'error'); const m = $('#syncMsg'); if (m) m.textContent = syncText(); }
+function syncText(){ return { ok:'Sincronizado', wait:'Conectando…', error:'Sin conexión. Se sincronizará al volver.', off:'' }[syncState] || ''; }
+function schedulePush(){ if (!docRef) return; clearTimeout(pushT); pushT = setTimeout(push, 600); }
+function push(){
+  if (!docRef) return;
+  docRef.set({ data:lastData, updatedAt:S.updatedAt || Date.now(), device:DEV }).then(() => setSync('ok'), () => setSync('error'));
+}
+function applyRemote(r){
+  if (document.activeElement?.isContentEditable || drag) { pendingRemote = r; return; }
+  pendingRemote = null;
+  try {
+    const d = JSON.parse(r.data);
+    S.subjects = d.subjects || []; S.papers = d.papers || []; S.updatedAt = r.updatedAt;
+    lastData = dataStr(); render();
+  } catch(e){}
+}
+function listen(){
+  unsub && unsub();
+  docRef = db.collection('boards').doc(syncCode);
+  setSync('wait');
+  unsub = docRef.onSnapshot({ includeMetadataChanges:false }, snap => {
+    if (snap.metadata.hasPendingWrites || snap.metadata.fromCache) return;
+    const adopt = adopting; adopting = false;
+    if (!snap.exists) { push(); return; }
+    const r = snap.data();
+    if (adopt || (r.updatedAt || 0) > (S.updatedAt || 0)) { if (r.device !== DEV || adopt || r.data !== lastData) applyRemote(r); }
+    else if ((r.updatedAt || 0) < (S.updatedAt || 0)) push();
+    setSync('ok');
+  }, () => setSync('error'));
+}
+function useCode(code, adopt){
+  syncCode = code; adopting = !!adopt; lsSet(SYNC_KEY, code);
+  if (db) listen();
+}
+function startSync(){
+  if (!canSync) return;
+  const m = location.hash.match(/k=([a-z0-9]{20,})/i);
+  if (m) { syncCode = m[1]; adopting = true; lsSet(SYNC_KEY, syncCode); history.replaceState(null, '', location.pathname + location.search); }
+  else { syncCode = lsGet(SYNC_KEY); if (!syncCode) { syncCode = genCode(); lsSet(SYNC_KEY, syncCode); } }
+  setSync('wait');
+  const base = `https://cdn.jsdelivr.net/npm/firebase@${FBV}/`;
+  loadScript(base + 'firebase-app-compat.js').then(() => loadScript(base + 'firebase-firestore-compat.js')).then(() => {
+    firebase.initializeApp(FB); db = firebase.firestore(); listen();
+  }).catch(() => setSync('error'));
+  window.addEventListener('online', () => { if (db) push(); });
+}
+function linkUrl(){ return `${location.origin}${location.pathname}#k=${syncCode}`; }
+
+const P = id => S.papers.find(p => p.id === id);
+const subj = id => S.subjects.find(s => s.id === id);
+const findItem = id => { for (const p of S.papers) { const i = p.items.findIndex(x => x.id === id); if (i > -1) return { p, i, it:p.items[i] }; } return {}; };
+const blockEnd = (items, i) => { let k = i + 1; while (k < items.length && items[k].lvl > items[i].lvl) k++; return k; };
+const visible = () => S.filter === 'all' ? S.papers : S.papers.filter(p => p.subject === S.filter);
+
+let undoSnap = null, pendingFocus = null;
+const snap = () => { undoSnap = JSON.stringify(S); };
+
+/* ---------- sound ---------- */
+let ac;
+function tone(freq, at, dur, vol, type='sine'){
+  const o = ac.createOscillator(), g = ac.createGain();
+  o.type = type; o.frequency.setValueAtTime(freq, at);
+  g.gain.setValueAtTime(0.0001, at); g.gain.exponentialRampToValueAtTime(vol, at + 0.008); g.gain.exponentialRampToValueAtTime(0.0001, at + dur);
+  o.connect(g).connect(ac.destination); o.start(at); o.stop(at + dur + 0.02);
+}
+function sound(kind){
+  if (!S.sound) return;
+  try {
+    ac = ac || new (window.AudioContext || window.webkitAudioContext)();
+    if (ac.state === 'suspended') ac.resume();
+    const t = ac.currentTime + 0.01;
+    if (kind === 'check') { tone(1046.5, t, 0.16, 0.16); tone(1568, t + 0.06, 0.32, 0.13); tone(3136, t + 0.06, 0.12, 0.025, 'triangle'); }
+    else if (kind === 'done') { [523.25, 659.25, 783.99, 1046.5].forEach((f,i) => tone(f, t + i*0.075, 0.5, 0.12)); tone(2093, t + 0.3, 0.6, 0.04, 'triangle'); }
+    else if (kind === 'uncheck') tone(520, t, 0.09, 0.06, 'triangle');
+    else if (kind === 'drop') { tone(392, t, 0.12, 0.1); tone(587.3, t + 0.05, 0.18, 0.08); }
+  } catch(e){}
+  try { navigator.vibrate && navigator.vibrate(kind === 'done' ? [12,40,12] : 8); } catch(e){}
+}
+
+/* ---------- render ---------- */
+const board = $('#board'), pills = $('#pills');
+function render(){
+  if (S.filter !== 'all' && !subj(S.filter)) S.filter = 'all';
+  renderPills();
+  const ps = visible();
+  board.innerHTML = ps.length ? ps.map(paperHtml).join('') : `<button class="empty" data-act="newPaper" aria-label="Nuevo papel">+</button>`;
+  bindAll(); save(); applyFocus();
+}
+function renderPills(){
+  pills.innerHTML = `<button class="pill ${S.filter==='all'?'on':''}" data-act="filter" data-id="all">Todos</button>` +
+    S.subjects.map(s => `<span class="pill ${S.filter===s.id?'on':''}" data-sid="${s.id}" style="--c:${s.color}" tabindex="0" role="button"><i class="dot"></i><span class="name">${esc(s.name)}</span></span>`).join('') +
+    `<button class="pill add" data-act="addSubject" aria-label="Nueva asignatura">+</button>`;
+}
+function stats(p){ return { t:p.items.length, d:p.items.filter(x => x.done).length }; }
+function whenHtml(p){
+  if (!p.date) return '';
+  const n = days(p.date), { t, d } = stats(p), cls = n < 0 && d < t ? 'late' : (n >= 0 && n <= 3 ? 'soon' : '');
+  return `<button class="when ${cls}" data-act="pDate" data-id="${p.id}" title="${fmtLong(p.date)}">${rel(n)}</button>`;
+}
+function itemHtml(x){
+  return `<li class="it ${x.done?'done':''}" data-id="${x.id}" style="--lvl:${x.lvl}">
+    <span class="bullet" data-id="${x.id}" aria-hidden="true">→</span>
+    <div class="it-text" contenteditable="plaintext-only" data-edit="item" data-id="${x.id}">${esc(x.t)}</div>
+    <button class="cb" data-act="check" data-id="${x.id}" aria-label="Marcar">${I.check}</button>
+  </li>`;
+}
+function paperHtml(p){
+  const s = subj(p.subject), { t, d } = stats(p);
+  return `<article class="paper ${s?'has-sub':''} ${t && d===t ? 'complete' : ''}" data-id="${p.id}" ${s ? `style="--c:${s.color}"` : ''}>
+    <span class="p-grip" aria-hidden="true">${I.grip}</span>
+    <header class="p-head">
+      ${s ? `<span class="p-sub">${esc(s.name)}</span>` : ''}${whenHtml(p)}<span class="sp"></span>
+      <span class="ic ${p.date?'':''}" title="Fecha">${I.cal}<input class="dt" type="date" data-id="${p.id}" value="${p.date||''}" aria-label="Fecha"></span>
+      <button class="ic ${p.progress?'on':''}" data-act="pProgress" data-id="${p.id}" aria-label="Barra de progreso">${I.prog}</button>
+      <button class="ic" data-act="pDelete" data-id="${p.id}" aria-label="Eliminar papel">${I.trash}</button>
+    </header>
+    <h2 class="p-title" contenteditable="plaintext-only" spellcheck="false" data-edit="title" data-id="${p.id}">${esc(p.title)}</h2>
+    ${p.progress ? `<div class="bar"><i style="width:${t ? d/t*100 : 0}%"></i></div>` : ''}
+    <div class="lines">
+      <ul class="items" data-p="${p.id}">${p.items.map(itemHtml).join('')}</ul>
+      <div class="blank" data-act="addHere" data-id="${p.id}"></div>
+    </div>
+  </article>`;
+}
+function updatePaper(id){
+  const p = P(id), el = board.querySelector(`.paper[data-id="${id}"]`);
+  if (!p || !el) return;
+  const tmp = document.createElement('div'); tmp.innerHTML = paperHtml(p);
+  const fresh = tmp.firstElementChild; el.replaceWith(fresh);
+  bindItems(fresh.querySelector('.items')); save(); applyFocus();
+}
+function refreshMeta(p){
+  const el = board.querySelector(`.paper[data-id="${p.id}"]`); if (!el) return;
+  const { t, d } = stats(p);
+  el.classList.toggle('complete', !!t && d === t);
+  p.items.forEach(x => { const li = el.querySelector(`.it[data-id="${x.id}"]`); if (li) li.classList.toggle('done', x.done); });
+  const bar = el.querySelector('.bar i'); if (bar) bar.style.width = (t ? d/t*100 : 0) + '%';
+  const w = el.querySelector('.when'); if (w) { const tmp = document.createElement('div'); tmp.innerHTML = whenHtml(p); w.replaceWith(tmp.firstElementChild); }
+  save();
+}
+function applyFocus(){
+  if (!pendingFocus) return;
+  const { sel, caret } = pendingFocus; pendingFocus = null;
+  const el = document.querySelector(sel); if (!el) return;
+  el.focus();
+  if (el.isContentEditable) {
+    const r = document.createRange(); r.selectNodeContents(el); if (caret !== 'all') r.collapse(caret === 'start');
+    const s = getSelection(); s.removeAllRanges(); s.addRange(r);
+  }
+}
+
+/* ---------- reorder ---------- */
+function bindAll(){
+  if (!window.Sortable) return;
+  Sortable.get(board)?.destroy();
+  Sortable.create(board, { handle:'.p-grip', draggable:'.paper', animation:180, onEnd(){
+    const ids = [...board.querySelectorAll('.paper')].map(x => x.dataset.id), set = new Set(ids);
+    const slots = []; S.papers.forEach((p,i) => set.has(p.id) && slots.push(i));
+    const moved = ids.map(P); slots.forEach((slot, k) => S.papers[slot] = moved[k]); save();
+  }});
+  board.querySelectorAll('.items').forEach(bindItems);
+}
+function bindItems(ul){
+  if (!window.Sortable || !ul) return;
+  Sortable.create(ul, { group:'items', handle:'.bullet', animation:150, delay:140, delayOnTouchOnly:true, onEnd(ev){
+    if (ev.from === ev.to && ev.oldIndex === ev.newIndex) return;
+    const fromP = P(ev.from.dataset.p), toP = P(ev.to.dataset.p), id = ev.item.dataset.id;
+    const i = fromP.items.findIndex(x => x.id === id);
+    const block = fromP.items.splice(i, blockEnd(fromP.items, i) - i), ids = new Set(block.map(b => b.id));
+    let prev = ev.item.previousElementSibling; while (prev && ids.has(prev.dataset.id)) prev = prev.previousElementSibling;
+    const at = prev ? toP.items.findIndex(x => x.id === prev.dataset.id) + 1 : 0;
+    const prevLvl = at > 0 ? toP.items[at-1].lvl : -1, shift = Math.min(block[0].lvl, prevLvl + 1) - block[0].lvl;
+    block.forEach(b => b.lvl = Math.max(0, Math.min(MAXLVL, b.lvl + shift)));
+    toP.items.splice(at, 0, ...block);
+    updatePaper(fromP.id); if (toP !== fromP) updatePaper(toP.id);
+  }});
+}
+
+/* ---------- items ---------- */
+function toggle(id){
+  const { p, i, it } = findItem(id); if (!it) return;
+  const before = stats(p), val = !it.done, end = blockEnd(p.items, i);
+  for (let k = i; k < end; k++) p.items[k].done = val;
+  let lvl = it.lvl;
+  for (let k = i - 1; k >= 0 && lvl > 0; k--) if (p.items[k].lvl < lvl) { const e = blockEnd(p.items, k); p.items[k].done = p.items.slice(k+1, e).every(x => x.done); lvl = p.items[k].lvl; }
+  refreshMeta(p);
+  const li = board.querySelector(`.it[data-id="${id}"]`);
+  if (li && val) { li.classList.remove('pop'); void li.offsetWidth; li.classList.add('pop'); }
+  const after = stats(p);
+  sound(!val ? 'uncheck' : after.d === after.t && before.d !== before.t ? 'done' : 'check');
+}
+function setLevel(id, delta, cycle){
+  const { p, i, it } = findItem(id); if (!it) return;
+  const max = i > 0 ? Math.min(MAXLVL, p.items[i-1].lvl + 1) : 0;
+  let nl = it.lvl + delta;
+  if (cycle && nl > max) nl = 0;
+  nl = Math.max(0, Math.min(max, nl));
+  const shift = nl - it.lvl; if (!shift) return;
+  const end = blockEnd(p.items, i);
+  for (let k = i; k < end; k++) { const x = p.items[k]; x.lvl = Math.max(0, Math.min(MAXLVL, x.lvl + shift)); board.querySelector(`.it[data-id="${x.id}"]`)?.style.setProperty('--lvl', x.lvl); }
+  save();
+}
+function removeItem(id, focusPrev){
+  const { p, i } = findItem(id); if (!p) return;
+  const prev = p.items[i-1];
+  p.items.splice(i, 1);
+  board.querySelector(`.it[data-id="${id}"]`)?.remove();
+  refreshMeta(p);
+  if (focusPrev) { pendingFocus = prev ? { sel:`[data-edit="item"][data-id="${prev.id}"]`, caret:'end' } : { sel:`[data-edit="title"][data-id="${p.id}"]`, caret:'end' }; applyFocus(); }
+}
+function addItem(pid, afterIdx, lvl){
+  const p = P(pid), n = It('', lvl || 0);
+  if (afterIdx == null) p.items.push(n); else p.items.splice(afterIdx + 1, 0, n);
+  pendingFocus = { sel:`[data-edit="item"][data-id="${n.id}"]` }; updatePaper(pid);
+}
+
+/* ---------- toast / settings ---------- */
+let toastT;
+function toast(){ const t = $('#toast'); t.innerHTML = '<button data-act="undo">Deshacer</button>'; t.hidden = false; clearTimeout(toastT); toastT = setTimeout(() => t.hidden = true, 5000); }
+function openSheet(){
+  const sh = $('#sheet'), standalone = window.self === window.top;
+  sh.innerHTML = `<div class="sheet-card" role="dialog" aria-label="Ajustes">
+    <button class="switch ${S.sound?'on':''}" data-act="toggleSound"><b></b>Sonido</button>
+    ${canSync && syncCode ? `<div class="sync">
+      <div id="qr" class="qr"></div>
+      <div class="sync-txt"><strong>Abre esto en el móvil</strong><span>Escanéalo con la cámara y tendrás la misma mesa, sincronizada.</span><span id="syncMsg" class="sync-st">${syncText()}</span>
+      <div class="row"><button class="btn ghostb" data-act="copyLink">Copiar enlace</button></div></div>
+    </div>` : `<p class="note">La sincronización entre dispositivos funciona en la versión publicada en GitHub Pages.</p>`}
+    <textarea id="bk" aria-label="Copia de seguridad">${esc(JSON.stringify({ v:2, subjects:S.subjects, papers:S.papers }))}</textarea>
+    <div class="row"><button class="btn ghostb" data-act="copyBk" id="copyBtn">Copiar</button>${standalone ? '<button class="btn ghostb" data-act="dlBk">Descargar</button>' : ''}<button class="btn ghostb" data-act="restore" id="restoreBtn">Restaurar lo pegado</button></div>
+    <div class="row"><button class="btn danger" data-act="wipe">Borrar todo</button><span class="sp"></span><button class="btn" data-act="closeSheet">Listo</button></div>
+  </div>`;
+  sh.hidden = false;
+  const box = $('#qr');
+  if (box) (window.qrcode ? Promise.resolve() : loadScript('https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.js')).then(() => {
+    const q = qrcode(0, 'M'); q.addData(linkUrl()); q.make(); box.innerHTML = q.createSvgTag(4, 2);
+  }).catch(() => {});
+}
+$('#sheet').addEventListener('click', e => { if (e.target.id === 'sheet') $('#sheet').hidden = true; });
+
+/* ---------- actions ---------- */
+const A = {
+  filter(id){ S.filter = id; render(); },
+  newPaper(){
+    const p = { id:uid(), title:'', subject:S.filter !== 'all' ? S.filter : '', date:'', progress:false, items:[] };
+    S.papers.unshift(p); pendingFocus = { sel:`[data-edit="title"][data-id="${p.id}"]` }; render(); window.scrollTo({ top:0, behavior:'smooth' });
+  },
+  addHere(pid){
+    const p = P(pid), last = p.items[p.items.length-1];
+    if (last && !last.t.trim()) { pendingFocus = { sel:`[data-edit="item"][data-id="${last.id}"]` }; applyFocus(); return; }
+    addItem(pid, null, 0);
+  },
+  pDate(id){ const inp = board.querySelector(`.dt[data-id="${id}"]`); inp && openDate(inp); },
+  pProgress(id){ const p = P(id); p.progress = !p.progress; updatePaper(id); },
+  pDelete(id){ snap(); S.papers = S.papers.filter(p => p.id !== id); render(); toast(); },
+  check(id){ toggle(id); },
+  renameSubject(id){ hideMenu(); startRename(id); },
+  delSubject(id){ hideMenu(); snap(); S.subjects = S.subjects.filter(x => x.id !== id); S.papers.forEach(p => { if (p.subject === id) p.subject = ''; }); render(); toast(); },
+  addSubject(){ const s = { id:uid(), name:'', color:COLORS[S.subjects.length % COLORS.length] }; S.subjects.push(s); render(); startRename(s.id, true); },
+  undo(){ if (!undoSnap) return; S = JSON.parse(undoSnap); undoSnap = null; $('#toast').hidden = true; render(); },
+  settings(){ openSheet(); },
+  closeSheet(){ $('#sheet').hidden = true; },
+  toggleSound(_, b){ S.sound = !S.sound; b.classList.toggle('on', S.sound); save(); if (S.sound) sound('check'); },
+  copyLink(_, b){ try { navigator.clipboard.writeText(linkUrl()).then(() => b.textContent = 'Copiado', () => b.textContent = linkUrl()); } catch(e){ b.textContent = linkUrl(); } },
+  copyBk(_, b){
+    const ta = $('#bk'); const ok = () => b.textContent = 'Copiado', fb = () => { ta.focus(); ta.select(); };
+    try { navigator.clipboard.writeText(ta.value).then(ok, fb); } catch(e) { fb(); }
+  },
+  dlBk(){ const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([$('#bk').value], { type:'application/json' })); a.download = `semestre-${iso(new Date())}.json`; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 1000); },
+  restore(_, b){
+    try {
+      let d = JSON.parse($('#bk').value); if (!Array.isArray(d.papers)) d = migrate(d);
+      if (!d || !Array.isArray(d.papers)) throw 0;
+      snap(); S.subjects = d.subjects || []; S.papers = d.papers; S.filter = 'all'; $('#sheet').hidden = true; render(); toast();
+    } catch(e) { b.textContent = 'Eso no es una copia válida'; }
+  },
+  wipe(_, b){
+    if (!b.dataset.armed) { b.dataset.armed = '1'; b.textContent = 'Otra vez para borrar'; return; }
+    snap(); S.papers = []; S.subjects = []; S.filter = 'all'; $('#sheet').hidden = true; render(); toast();
+  },
+};
+document.addEventListener('click', e => {
+  if (suppressClick) { suppressClick = false; return; }
+  const bl = e.target.closest('.bullet');
+  if (bl) { setLevel(bl.dataset.id, 1, true); return; }
+  const b = e.target.closest('[data-act]'); if (!b) return;
+  A[b.dataset.act]?.(b.dataset.id, b, e);
+});
+
+/* ---------- date ---------- */
+function openDate(inp){
+  try { inp.showPicker(); return; } catch(e) {}
+  inp.classList.add('show'); inp.parentElement.classList.add('reveal'); inp.focus();
+}
+board.addEventListener('click', e => {
+  const inp = e.target.closest('.dt'); if (!inp || inp.classList.contains('show')) return;
+  e.preventDefault(); openDate(inp);
+});
+document.addEventListener('change', e => {
+  if (!e.target.matches?.('.dt')) return;
+  const p = P(e.target.dataset.id); p.date = e.target.value || ''; updatePaper(p.id);
+});
+document.addEventListener('focusout', e => {
+  if (e.target.matches?.('.dt.show')) setTimeout(() => updatePaper(e.target.dataset.id), 150);
+});
+
+/* ---------- subject pills: tap = filter, drag onto a sheet = assign, double tap = rename ---------- */
+let drag = null, ghost = null, hoverPaper = null, suppressClick = false, lastTap = { id:null, t:0 };
+pills.addEventListener('pointerdown', e => {
+  const pill = e.target.closest('.pill[data-sid]'); if (!pill || pill.classList.contains('editing') || e.button > 0) return;
+  drag = { sid:pill.dataset.sid, pill, x:e.clientX, y:e.clientY, pid:e.pointerId, active:false };
+  if (e.pointerType !== 'mouse') drag.timer = setTimeout(() => { if (drag && !drag.active) { const d = drag; endDrag(); lastTap = { id:null, t:0 }; openMenu(d.sid, d.x, d.y); try { navigator.vibrate && navigator.vibrate(10); } catch(_){} } }, 480);
+});
+pills.addEventListener('contextmenu', e => {
+  const pill = e.target.closest('.pill[data-sid]'); if (!pill || pill.classList.contains('editing')) return;
+  e.preventDefault(); endDrag(); openMenu(pill.dataset.sid, e.clientX, e.clientY);
+});
+const menu = $('#menu');
+function openMenu(sid, x, y){
+  menu.innerHTML = `<button class="mi" data-act="renameSubject" data-id="${sid}">Renombrar</button><button class="mi danger" data-act="delSubject" data-id="${sid}">Eliminar asignatura</button>`;
+  menu.hidden = false;
+  menu.style.left = Math.max(12, Math.min(x, innerWidth - menu.offsetWidth - 12)) + 'px';
+  menu.style.top = Math.max(12, Math.min(y + 4, innerHeight - menu.offsetHeight - 12)) + 'px';
+}
+function hideMenu(){ menu.hidden = true; menu.innerHTML = ''; }
+document.addEventListener('pointerdown', e => { if (!menu.hidden && !menu.contains(e.target)) hideMenu(); });
+window.addEventListener('resize', hideMenu);
+window.addEventListener('pointermove', e => {
+  if (!drag || e.pointerId !== drag.pid) return;
+  if (!drag.active) {
+    if (Math.hypot(e.clientX - drag.x, e.clientY - drag.y) < 6) return;
+    clearTimeout(drag.timer); drag.active = true; document.body.classList.add('dragging');
+    ghost = drag.pill.cloneNode(true); ghost.classList.add('ghost'); ghost.classList.remove('on'); document.body.appendChild(ghost);
+  }
+  ghost.style.transform = `translate(${e.clientX - 20}px, ${e.clientY - 17}px)`;
+  const el = document.elementFromPoint(e.clientX, e.clientY)?.closest('.paper');
+  if (el !== hoverPaper) { hoverPaper?.classList.remove('drop'); hoverPaper = el; if (el) { el.classList.add('drop'); el.style.setProperty('--dc', subj(drag.sid).color); } }
+});
+function endDrag(){ if (drag) clearTimeout(drag.timer); if (pendingRemote) setTimeout(() => pendingRemote && applyRemote(pendingRemote), 0); ghost?.remove(); ghost = null; hoverPaper?.classList.remove('drop'); hoverPaper = null; document.body.classList.remove('dragging'); drag = null; }
+window.addEventListener('pointerup', e => {
+  if (!drag || e.pointerId !== drag.pid) return;
+  const d = drag;
+  if (d.active) {
+    const target = hoverPaper; endDrag();
+    if (target) { const p = P(target.dataset.id); p.subject = p.subject === d.sid ? '' : d.sid; sound('drop'); render(); }
+    return;
+  }
+  endDrag();
+  const now = Date.now();
+  if (lastTap.id === d.sid && now - lastTap.t < 350) { lastTap = { id:null, t:0 }; startRename(d.sid); return; }
+  lastTap = { id:d.sid, t:now };
+  S.filter = S.filter === d.sid ? 'all' : d.sid; render();
+});
+window.addEventListener('pointercancel', endDrag);
+pills.addEventListener('keydown', e => {
+  const pill = e.target.closest?.('.pill[data-sid]'); if (!pill || pill.classList.contains('editing')) return;
+  if (e.key === 'Enter') { e.preventDefault(); S.filter = S.filter === pill.dataset.sid ? 'all' : pill.dataset.sid; render(); }
+  if (e.key === 'F2') { e.preventDefault(); startRename(pill.dataset.sid); }
+});
+function startRename(sid, fresh){
+  const pill = pills.querySelector(`.pill[data-sid="${sid}"]`); if (!pill) return;
+  const name = pill.querySelector('.name'), dot = pill.querySelector('.dot'), s = subj(sid), original = s.name;
+  pill.classList.add('editing'); name.contentEditable = 'plaintext-only'; name.focus();
+  const r = document.createRange(); r.selectNodeContents(name); const sel = getSelection(); sel.removeAllRanges(); sel.addRange(r);
+  const onDot = ev => { ev.preventDefault(); s.color = COLORS[(COLORS.indexOf(s.color) + 1) % COLORS.length]; pill.style.setProperty('--c', s.color); save(); };
+  dot.addEventListener('pointerdown', onDot);
+  const finish = cancel => {
+    name.removeEventListener('blur', onBlur); name.removeEventListener('keydown', onKey); dot.removeEventListener('pointerdown', onDot);
+    const v = cancel ? original : name.textContent.replace(/\s+/g,' ').trim();
+    if (!v) {
+      if (!fresh) snap();
+      S.subjects = S.subjects.filter(x => x.id !== sid); S.papers.forEach(p => { if (p.subject === sid) p.subject = ''; });
+      render(); if (!fresh) toast(); return;
+    }
+    s.name = v; render();
+  };
+  const onBlur = () => finish(false);
+  const onKey = ev => { if (ev.key === 'Enter') { ev.preventDefault(); name.blur(); } else if (ev.key === 'Escape') { ev.preventDefault(); name.removeEventListener('blur', onBlur); finish(true); } };
+  name.addEventListener('blur', onBlur); name.addEventListener('keydown', onKey);
+}
+
+/* ---------- swipe a line right/left to indent on touch ---------- */
+let sw = null;
+board.addEventListener('pointerdown', e => {
+  if (e.pointerType !== 'touch') return;
+  const li = e.target.closest('.it'); if (!li || e.target.closest('.bullet,.cb')) return;
+  sw = { id:li.dataset.id, x:e.clientX, y:e.clientY };
+});
+board.addEventListener('pointerup', e => {
+  if (!sw) return; const dx = e.clientX - sw.x, dy = e.clientY - sw.y, id = sw.id; sw = null;
+  if (Math.abs(dx) > 45 && Math.abs(dy) < 25) { setLevel(id, dx > 0 ? 1 : -1); document.activeElement?.blur?.(); }
+});
+board.addEventListener('pointercancel', () => sw = null);
+
+/* ---------- typing ---------- */
+document.addEventListener('input', e => {
+  const el = e.target.closest?.('[data-edit]'); if (!el) return;
+  const v = el.textContent.replace(/\n/g,' ');
+  if (el.dataset.edit === 'title') P(el.dataset.id).title = v; else { const r = findItem(el.dataset.id); if (r.it) r.it.t = v; }
+  save();
+});
+document.addEventListener('focusout', e => {
+  const el = e.target;
+  if (pendingRemote && el.isContentEditable) setTimeout(() => { if (pendingRemote && !document.activeElement?.isContentEditable) applyRemote(pendingRemote); }, 50);
+  if (el.matches?.('[data-edit="item"]')) {
+    const v = el.textContent.replace(/\s+/g,' ').trim();
+    if (!v) removeItem(el.dataset.id, false); else { const r = findItem(el.dataset.id); if (r.it) { r.it.t = v; save(); } }
+  } else if (el.matches?.('[data-edit="title"]')) {
+    const p = P(el.dataset.id); if (p) { p.title = el.textContent.replace(/\s+/g,' ').trim(); if (!p.title) el.textContent = ''; save(); }
+  }
+});
+document.addEventListener('keydown', e => {
+  const el = e.target;
+  if (e.key === 'Escape') { if (!menu.hidden) hideMenu(); else if (!$('#sheet').hidden) $('#sheet').hidden = true; else el.blur?.(); return; }
+  if (el.matches?.('[data-edit="title"]') && e.key === 'Enter') {
+    e.preventDefault(); const p = P(el.dataset.id);
+    if (p.items.length) { pendingFocus = { sel:`[data-edit="item"][data-id="${p.items[0].id}"]`, caret:'end' }; applyFocus(); } else addItem(p.id, null, 0);
+    return;
+  }
+  if (!el.matches?.('[data-edit="item"]')) return;
+  const id = el.dataset.id, { p, i, it } = findItem(id); if (!it) return;
+  if (e.key === 'Tab') { e.preventDefault(); setLevel(id, e.shiftKey ? -1 : 1); return; }
+  if (e.key === 'Enter' && !e.shiftKey) {
+    e.preventDefault();
+    const v = el.textContent.trim();
+    if (!v) { if (it.lvl > 0) setLevel(id, -1); else el.blur(); return; }
+    it.t = v; addItem(p.id, i, it.lvl); return;
+  }
+  if (e.key === 'Backspace' && !el.textContent) { e.preventDefault(); removeItem(id, true); }
+});
+document.addEventListener('paste', e => {
+  const el = e.target.closest?.('[data-edit]'); if (!el) return;
+  const text = (e.clipboardData && e.clipboardData.getData('text/plain')) || '';
+  e.preventDefault();
+  if (el.dataset.edit === 'item' && /\n/.test(text.trim())) {
+    const { p, i, it } = findItem(el.dataset.id);
+    const lines = text.split(/\r?\n/).filter(l => l.trim()).map(line => {
+      const ind = (line.match(/^[\t ]*/)[0].replace(/\t/g,'  ').length / 2) | 0;
+      return It(line.replace(/^\s*([-*•·→>]|\d+[.)]|\[[ x]\])\s*/i,'').trim(), Math.min(MAXLVL, it.lvl + ind));
+    });
+    if (!it.t.trim()) p.items.splice(i, 1, ...lines); else p.items.splice(i + 1, 0, ...lines);
+    pendingFocus = { sel:`[data-edit="item"][data-id="${lines[lines.length-1].id}"]`, caret:'end' }; updatePaper(p.id); return;
+  }
+  document.execCommand('insertText', false, text.replace(/\s*\n\s*/g,' '));
+});
+
+render();
+startSync();
+})();
+</script>
+
+<script>if('serviceWorker' in navigator){addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{}))}</script>
+</body>
+</html>
