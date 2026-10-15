@@ -68,7 +68,8 @@ body.dragging{user-select:none;-webkit-user-select:none;cursor:grabbing}
 .ghost{position:fixed;left:0;top:0;z-index:80;pointer-events:none;box-shadow:var(--shadow);background:var(--paper);color:var(--fg)}
 
 /* Sheets */
-.board{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(300px,100%),1fr));gap:22px;align-items:start}
+.board{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(300px,100%),1fr));column-gap:22px;grid-auto-rows:1px;align-items:start}
+.board>*{margin-bottom:22px}
 .paper{position:relative;background:var(--paper);border-radius:4px 4px 6px 6px;box-shadow:var(--sheet);padding:14px 16px 6px 32px;min-width:0;transition:box-shadow .15s,transform .15s}
 .paper::before{content:"";position:absolute;left:19px;top:0;bottom:0;width:2px;background:var(--c,var(--nosub));transition:background .25s,width .2s}
 .paper.has-sub::before{width:3px}
@@ -189,8 +190,12 @@ body.dragging{user-select:none;-webkit-user-select:none;cursor:grabbing}
 .quick{display:flex;gap:6px;padding:2px 6px 6px;flex-wrap:wrap}
 .quick button{all:unset;cursor:pointer;font-size:14px;padding:6px 10px;border-radius:8px;box-shadow:inset 0 0 0 1px var(--line);color:var(--fg)}
 .quick button:hover{background:var(--hover)}
-.it.parent .bullet{color:var(--muted)}
-.it.parent.open .bullet{transform:rotate(90deg)}
+.bullet .tri{display:none;width:100%;height:var(--lh);place-items:center;color:var(--muted)}
+.bullet .tri svg{transition:transform .15s}
+.it.parent:not(.open) .bullet .tri svg{transform:rotate(-90deg)}
+.it.parent:hover .bullet .arr{display:none}
+.it.parent:hover .bullet .tri{display:grid}
+@media (hover:none){.it.parent .bullet .arr{display:none}.it.parent .bullet .tri{display:grid}}
 .icount,.pcount{font-size:13.5px;color:var(--muted);padding:0 5px;font-variant-numeric:tabular-nums;white-space:nowrap}
 .paper.folded{padding-bottom:12px}
 .paper.folded .p-title{margin-bottom:0}
@@ -582,7 +587,7 @@ function shownItems(p){
 function itemHtml(x, sub){
   const parent = !!sub, open = parent && !x.fold;
   return `<li class="it ${x.done?'done':''} ${parent?'parent':''} ${open?'open':''}" data-id="${x.id}" style="--lvl:${x.lvl}">
-    <span class="bullet" data-id="${x.id}" aria-hidden="true">→</span>
+    <span class="bullet" data-id="${x.id}" aria-hidden="true"><span class="arr">→</span>${parent ? '<span class="tri"><svg width="10" height="10" viewBox="0 0 10 10" fill="currentColor"><path d="M1 2.5h8L5 8z"/></svg></span>' : ''}</span>
     <div class="it-text" contenteditable="plaintext-only" data-edit="item" data-id="${x.id}">${esc(x.t)}</div>
     <span class="meta">${parent && x.fold ? `<span class="icount">${sub.d}/${sub.t}</span>` : ''}${itemMeta(x)}<button class="imore" data-act="iMenu" data-id="${x.id}" aria-label="Opciones de la línea">${I.more}</button></span>
     <button class="cb" data-act="check" data-id="${x.id}" aria-label="Marcar">${I.check}</button>
@@ -615,7 +620,7 @@ function updatePaper(id){
   if (!p || !el) return;
   const tmp = document.createElement('div'); tmp.innerHTML = paperHtml(p);
   const fresh = tmp.firstElementChild; el.replaceWith(fresh);
-  bindItems(fresh.querySelector('.items')); save(); applyFocus();
+  bindItems(fresh.querySelector('.items')); fitCell(fresh); fitRO.observe(fresh); save(); applyFocus();
 }
 function refreshMeta(p){
   const el = board.querySelector(`.paper[data-id="${p.id}"]`); if (!el) return;
@@ -638,7 +643,11 @@ function applyFocus(){
 }
 
 /* ---------- reorder ---------- */
+const fitRO = new ResizeObserver(es => { for (const e of es) fitCell(e.target); });
+function fitCell(el){ el.style.gridRowEnd = 'span ' + Math.max(1, Math.ceil(el.getBoundingClientRect().height + 22)); }
+function watchCells(){ board.querySelectorAll(':scope > *').forEach(el => { fitCell(el); fitRO.observe(el); }); }
 function bindAll(){
+  watchCells();
   if (!window.Sortable) return;
   Sortable.get(board)?.destroy();
   Sortable.create(board, { handle:'.p-grip', draggable:'.paper', animation:180, onEnd(){
