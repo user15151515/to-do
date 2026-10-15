@@ -161,6 +161,17 @@ body.dragging{user-select:none;-webkit-user-select:none;cursor:grabbing}
 #syncbar button{all:unset;cursor:pointer;font-weight:600;white-space:nowrap}
 .code{font:14px ui-monospace,Menlo,monospace;color:var(--muted);word-break:break-all}
 .link-in{all:unset;box-sizing:border-box;flex:1;min-width:0;padding:9px 12px;border-radius:9px;box-shadow:inset 0 0 0 1px var(--line);font-size:15px}
+.when.rep{color:var(--muted)}
+.days{display:flex;gap:4px;padding:6px 6px 4px}
+.day{all:unset;box-sizing:border-box;width:34px;height:34px;border-radius:50%;display:grid;place-items:center;cursor:pointer;font-size:14px;color:var(--muted)}
+.day:hover{background:var(--hover);color:var(--fg)}
+.day.on{background:var(--fg);color:var(--paper)}
+.every{display:flex;align-items:center;gap:8px;padding:6px 8px;font-size:15px;color:var(--muted)}
+.every.on{color:var(--fg)}
+.every span{flex:1;text-align:center}
+.every button{all:unset;box-sizing:border-box;width:32px;height:32px;border-radius:8px;display:grid;place-items:center;cursor:pointer;box-shadow:inset 0 0 0 1px var(--line);color:var(--fg)}
+.every button:hover{background:var(--hover)}
+.rep-hint{margin:0;padding:4px 10px 8px;font-size:14px;color:var(--muted)}
 #toast{position:fixed;z-index:70;left:50%;transform:translateX(-50%);bottom:calc(22px + env(safe-area-inset-bottom,0px));background:var(--fg);color:var(--paper);border-radius:999px;box-shadow:var(--shadow)}
 #toast button{all:unset;cursor:pointer;font-size:15px;font-weight:500;padding:10px 20px;display:block}
 
@@ -208,6 +219,7 @@ const I = {
   cal:'<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><rect x="2.5" y="3.5" width="11" height="10" rx="2"/><path d="M2.5 6.5h11M5.5 2v3M10.5 2v3"/></svg>',
   prog:'<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><rect x="2" y="6" width="12" height="4" rx="2"/><path d="M4 8h4" stroke-width="2"/></svg>',
   trash:'<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 4.5h11M6.5 4.5V3h3v1.5M4 4.5l.7 8.6a1 1 0 0 0 1 .9h4.6a1 1 0 0 0 1-.9l.7-8.6"/></svg>',
+  more:'<svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><circle cx="3.5" cy="8" r="1.3"/><circle cx="8" cy="8" r="1.3"/><circle cx="12.5" cy="8" r="1.3"/></svg>',
   check:'<svg width="11" height="11" viewBox="0 0 11 11" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 5.8 4.4 8.2 9 3"/></svg>',
 };
 
@@ -309,6 +321,7 @@ function applyRemote(r){
     if (keep.kind === 'title') { const p = P(keep.id); if (p && p.title !== keep.text) { p.title = keep.text; localWins = true; } }
     else { const f = findItem(keep.id); if (f.it && f.it.t !== keep.text) { f.it.t = keep.text; localWins = true; } }
   }
+  if (checkResets()) localWins = true;
   lastData = localWins ? '' : dataStr();
   try { localStorage.setItem(KEY, JSON.stringify(S)); } catch(e){}
   render();
@@ -407,6 +420,63 @@ function whenHtml(p){
   const n = days(p.date), { t, d } = stats(p), cls = n < 0 && d < t ? 'late' : (n >= 0 && n <= 3 ? 'soon' : '');
   return `<button class="when ${cls}" data-act="pDate" data-id="${p.id}" title="${fmtLong(p.date)}">${rel(n)}</button>`;
 }
+const DAYN = ['domingo','lunes','martes','miércoles','jueves','viernes','sábado'];
+function repText(r){
+  if (r.every) return r.every === 1 ? 'Cada día' : `Cada ${r.every} días`;
+  const d = [...(r.days||[])].sort((a,b) => ((a+6)%7) - ((b+6)%7));
+  if (d.length === 7) return 'Cada día';
+  if (d.length === 5 && [1,2,3,4,5].every(x => d.includes(x))) return 'Entre semana';
+  const n = d.map(x => DAYN[x]);
+  return 'Cada ' + (n.length > 1 ? n.slice(0,-1).join(', ') + ' y ' + n[n.length-1] : n[0]);
+}
+function lastResetDate(r){
+  if (!r) return null;
+  if (r.days && r.days.length) { for (let k = 0; k < 7; k++) { const d = addDays(-k); if (r.days.includes(d.getDay())) return iso(d); } return null; }
+  if (r.every) {
+    const f = parse(r.from), n = Math.floor((addDays(0) - f) / 864e5 / r.every);
+    if (n < 0) return r.from;
+    const d = new Date(f); d.setDate(d.getDate() + n * r.every); return iso(d);
+  }
+  return null;
+}
+function checkResets(){
+  let changed = false;
+  for (const p of S.papers) {
+    if (!p.repeat) continue;
+    const r = lastResetDate(p.repeat);
+    if (r && (!p.lastReset || r > p.lastReset)) { p.lastReset = r; p.items.forEach(x => x.done = false); changed = true; }
+  }
+  return changed;
+}
+const bump = t => t.replace(/(\d+)(\D*)$/, (m, n, rest) => String(+n + 1).padStart(n.length, '0') + rest);
+function dupItem(id){
+  const { p, i } = findItem(id); if (!p) return;
+  const e = blockEnd(p.items, i);
+  const block = p.items.slice(i, e).map((x, k) => ({ id:uid(), t:k === 0 ? bump(x.t) : x.t, lvl:x.lvl, done:false }));
+  p.items.splice(e, 0, ...block);
+  pendingFocus = { sel:`[data-edit="item"][data-id="${block[0].id}"]`, caret:'end' }; updatePaper(p.id);
+}
+function copySubs(id){
+  const { p, i, it } = findItem(id); if (!p) return;
+  const subs = p.items.slice(i + 1, blockEnd(p.items, i)); if (!subs.length) return;
+  let ps = 0, pe = p.items.length;
+  for (let k = i - 1; k >= 0; k--) if (p.items[k].lvl < it.lvl) { ps = k + 1; pe = blockEnd(p.items, k); break; }
+  const sibs = []; for (let k = ps; k < pe; k++) if (p.items[k].lvl === it.lvl && k !== i) sibs.push(p.items[k].id);
+  snap();
+  for (const sid of sibs) {
+    const k = p.items.findIndex(x => x.id === sid), ke = blockEnd(p.items, k);
+    const have = new Set(p.items.slice(k + 1, ke).map(x => x.t.trim().toLowerCase()));
+    const add = subs.filter(x => !have.has(x.t.trim().toLowerCase())).map(x => ({ id:uid(), t:x.t, lvl:x.lvl, done:false }));
+    p.items.splice(ke, 0, ...add);
+  }
+  updatePaper(p.id); toast();
+}
+function dupPaper(id){
+  const p = P(id); if (!p) return;
+  const c = JSON.parse(JSON.stringify(p)); c.id = uid(); c.items.forEach(x => { x.id = uid(); x.done = false; });
+  S.papers.splice(S.papers.indexOf(p) + 1, 0, c);
+  pendingFocus = { sel:`[data-edit="title"][data-id="${c.id}"]`, caret:'all' }; render();
+}
 function itemHtml(x){
   return `<li class="it ${x.done?'done':''}" data-id="${x.id}" style="--lvl:${x.lvl}">
     <span class="bullet" data-id="${x.id}" aria-hidden="true">→</span>
@@ -419,10 +489,10 @@ function paperHtml(p){
   return `<article class="paper ${s?'has-sub':''} ${t && d===t ? 'complete' : ''}" data-id="${p.id}" ${s ? `style="--c:${s.color}"` : ''}>
     <span class="p-grip" aria-hidden="true">${I.grip}</span>
     <header class="p-head">
-      ${s ? `<span class="p-sub">${esc(s.name)}</span>` : ''}${whenHtml(p)}<span class="sp"></span>
+      ${s ? `<span class="p-sub">${esc(s.name)}</span>` : ''}${whenHtml(p)}${p.repeat ? `<button class="when rep" data-act="pRepeat" data-id="${p.id}">↻ ${repText(p.repeat)}</button>` : ''}<span class="sp"></span>
       <span class="ic ${p.date?'':''}" title="Fecha">${I.cal}<input class="dt" type="date" data-id="${p.id}" value="${p.date||''}" aria-label="Fecha"></span>
       <button class="ic ${p.progress?'on':''}" data-act="pProgress" data-id="${p.id}" aria-label="Barra de progreso">${I.prog}</button>
-      <button class="ic" data-act="pDelete" data-id="${p.id}" aria-label="Eliminar papel">${I.trash}</button>
+      <button class="ic" data-act="pMenu" data-id="${p.id}" aria-label="Más opciones">${I.more}</button>
     </header>
     <h2 class="p-title" contenteditable="plaintext-only" spellcheck="false" data-edit="title" data-id="${p.id}">${esc(p.title)}</h2>
     ${p.progress ? `<div class="bar"><i style="width:${t ? d/t*100 : 0}%"></i></div>` : ''}
@@ -563,8 +633,24 @@ const A = {
   },
   pDate(id){ const inp = board.querySelector(`.dt[data-id="${id}"]`); inp && openDate(inp); },
   pProgress(id){ const p = P(id); p.progress = !p.progress; updatePaper(id); },
-  pDelete(id){ snap(); S.papers = S.papers.filter(p => p.id !== id); render(); toast(); },
-  check(id){ toggle(id); },
+  pDelete(id){ hideMenu(); snap(); S.papers = S.papers.filter(p => p.id !== id); render(); toast(); },
+  pMenu(id, b){ const r = b.getBoundingClientRect(); paperMenu(id, r.left, r.bottom); },
+  pRepeat(id, b){ const r = b.getBoundingClientRect(); repeatMenu(id, r.left, r.bottom); },
+  pDup(id){ hideMenu(); dupPaper(id); },
+  repDay(id, b){
+    const p = P(id), d = +b.dataset.d, cur = new Set(p.repeat?.days || []);
+    cur.has(d) ? cur.delete(d) : cur.add(d);
+    p.repeat = cur.size ? { days:[...cur] } : null; afterRepeat(p);
+  },
+  repEvery(id, b){
+    const p = P(id), n = Math.max(1, Math.min(60, (p.repeat?.every || 0) + +b.dataset.n));
+    p.repeat = { every:n, from:iso(addDays(0)) }; afterRepeat(p);
+  },
+  repOff(id){ const p = P(id); p.repeat = null; p.lastReset = ''; hideMenu(); updatePaper(id); },
+  iDup(id){ hideMenu(); dupItem(id); },
+  iSubs(id){ hideMenu(); copySubs(id); },
+  iDel(id){ hideMenu(); const { p, i } = findItem(id); if (!p) return; snap(); p.items.splice(i, blockEnd(p.items, i) - i); updatePaper(p.id); toast(); },
+  check(id){ if (skipCheck) { skipCheck = false; return; } toggle(id); },
   renameSubject(id){ hideMenu(); startRename(id); },
   delSubject(id){ hideMenu(); snap(); S.subjects = S.subjects.filter(x => x.id !== id); S.papers.forEach(p => { if (p.subject === id) p.subject = ''; }); render(); toast(); },
   addSubject(){ const s = { id:uid(), name:'', color:COLORS[S.subjects.length % COLORS.length] }; S.subjects.push(s); render(); startRename(s.id, true); },
@@ -634,12 +720,45 @@ pills.addEventListener('contextmenu', e => {
 });
 const menu = $('#menu');
 function openMenu(sid, x, y){
-  menu.innerHTML = `<button class="mi" data-act="renameSubject" data-id="${sid}">Renombrar</button><button class="mi danger" data-act="delSubject" data-id="${sid}">Eliminar asignatura</button>`;
+  showMenu(`<button class="mi" data-act="renameSubject" data-id="${sid}">Renombrar</button><button class="mi danger" data-act="delSubject" data-id="${sid}">Eliminar asignatura</button>`, x, y);
+}
+function paperMenu(id, x, y){
+  showMenu(`<button class="mi" data-act="pRepeat" data-id="${id}">Repetir…</button><button class="mi" data-act="pDup" data-id="${id}">Duplicar papel</button><button class="mi danger" data-act="pDelete" data-id="${id}">Eliminar papel</button>`, x, y);
+}
+function repeatHtml(p){
+  const r = p.repeat || {}, days = r.days || [];
+  return `<div class="days">${['L','M','X','J','V','S','D'].map((l, k) => { const d = (k + 1) % 7; return `<button class="day ${days.includes(d)?'on':''}" data-act="repDay" data-id="${p.id}" data-d="${d}" aria-label="${DAYN[d]}">${l}</button>`; }).join('')}</div>
+    <div class="every ${r.every?'on':''}"><button data-act="repEvery" data-id="${p.id}" data-n="-1" aria-label="Menos">−</button><span>${r.every ? (r.every === 1 ? 'Cada día' : `Cada ${r.every} días`) : 'Cada N días'}</span><button data-act="repEvery" data-id="${p.id}" data-n="1" aria-label="Más">+</button></div>
+    ${p.repeat ? `<button class="mi" data-act="repOff" data-id="${p.id}">Sin repetición</button>` : `<p class="rep-hint">Las tareas se desmarcan solas ese día.</p>`}`;
+}
+function repeatMenu(id, x, y){ showMenu(repeatHtml(P(id)), x, y); }
+function afterRepeat(p){ p.lastReset = lastResetDate(p.repeat) || ''; updatePaper(p.id); menu.innerHTML = repeatHtml(p); }
+function itemMenu(id, x, y){
+  const { p, i, it } = findItem(id); if (!it) return;
+  const hasSubs = blockEnd(p.items, i) > i + 1, nt = bump(it.t);
+  showMenu(`<button class="mi" data-act="iDup" data-id="${id}">Duplicar${nt !== it.t ? ` como “${esc(nt)}”` : ''}</button>
+    ${hasSubs ? `<button class="mi" data-act="iSubs" data-id="${id}">Copiar sus subtareas a las demás</button>` : ''}
+    <button class="mi danger" data-act="iDel" data-id="${id}">Eliminar</button>`, x, y);
+}
+function showMenu(html, x, y){
+  menu.innerHTML = html;
   menu.hidden = false;
   menu.style.left = Math.max(12, Math.min(x, innerWidth - menu.offsetWidth - 12)) + 'px';
   menu.style.top = Math.max(12, Math.min(y + 4, innerHeight - menu.offsetHeight - 12)) + 'px';
 }
 function hideMenu(){ menu.hidden = true; menu.innerHTML = ''; }
+board.addEventListener('contextmenu', e => {
+  const li = e.target.closest('.it'), pp = e.target.closest('.paper'); if (!pp) return;
+  e.preventDefault();
+  if (li) itemMenu(li.dataset.id, e.clientX, e.clientY); else paperMenu(pp.dataset.id, e.clientX, e.clientY);
+});
+let lp = null, skipCheck = false;
+board.addEventListener('pointerdown', e => {
+  const cb = e.target.closest('.cb'); if (!cb || e.pointerType === 'mouse') return;
+  const x = e.clientX, y = e.clientY;
+  lp = setTimeout(() => { lp = null; skipCheck = true; try { navigator.vibrate && navigator.vibrate(10); } catch(_){} itemMenu(cb.dataset.id, x, y); }, 480);
+});
+['pointerup','pointercancel','pointermove'].forEach(t => board.addEventListener(t, e => { if (lp && (t !== 'pointermove' || Math.abs(e.movementX) + Math.abs(e.movementY) > 4)) { clearTimeout(lp); lp = null; } }));
 document.addEventListener('pointerdown', e => { if (!menu.hidden && !menu.contains(e.target)) hideMenu(); });
 window.addEventListener('resize', hideMenu);
 window.addEventListener('pointermove', e => {
@@ -736,10 +855,18 @@ document.addEventListener('keydown', e => {
   if (!el.matches?.('[data-edit="item"]')) return;
   const id = el.dataset.id, { p, i, it } = findItem(id); if (!it) return;
   if (e.key === 'Tab') { e.preventDefault(); setLevel(id, e.shiftKey ? -1 : 1); return; }
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'd') { e.preventDefault(); it.t = el.textContent.trim() || it.t; dupItem(id); return; }
   if (e.key === 'Enter' && !e.shiftKey) {
     e.preventDefault();
     const v = el.textContent.trim();
     if (!v) { if (it.lvl > 0) setLevel(id, -1); else el.blur(); return; }
+    const sm = v.match(/^(.*?)(\d+)\s*\.\.\.?\s*(\d+)$/);
+    if (sm && +sm[3] > +sm[2] && +sm[3] - +sm[2] <= 60) {
+      const [, pre, a, b] = sm, list = [];
+      for (let n = +a; n <= +b; n++) list.push(n === +a ? Object.assign(it, { t:pre + n }) : It(pre + n, it.lvl));
+      p.items.splice(i, 1, ...list);
+      pendingFocus = { sel:`[data-edit="item"][data-id="${list[list.length-1].id}"]`, caret:'end' }; updatePaper(p.id); return;
+    }
     it.t = v; addItem(p.id, i, it.lvl); return;
   }
   if (e.key === 'Backspace' && !el.textContent) { e.preventDefault(); removeItem(id, true); }
@@ -760,8 +887,11 @@ document.addEventListener('paste', e => {
   document.execCommand('insertText', false, text.replace(/\s*\n\s*/g,' '));
 });
 
+checkResets();
 render();
 startSync();
+setInterval(() => { if (checkResets()) render(); }, 60000);
+document.addEventListener('visibilitychange', () => { if (!document.hidden && checkResets()) render(); });
 })();
 </script>
 
