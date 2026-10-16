@@ -203,6 +203,64 @@ body.dragging{user-select:none;-webkit-user-select:none;cursor:grabbing}
 .paper.folded .bar{margin:8px 0 0}
 .donebar{all:unset;cursor:pointer;display:block;font-size:14px;color:var(--muted);padding:6px 0 8px 28px}
 .donebar:hover{color:var(--fg)}
+html.noscroll,html.noscroll body{overflow:hidden}
+#planner{position:fixed;inset:0;z-index:55;background:var(--desk);overflow:auto;overscroll-behavior:contain;
+  padding:calc(16px + env(safe-area-inset-top,0px)) max(16px,env(safe-area-inset-right,0px)) calc(60px + env(safe-area-inset-bottom,0px)) max(16px,env(safe-area-inset-left,0px))}
+.pl-wrap{max-width:1240px;margin:0 auto;display:flex;flex-direction:column;gap:18px}
+.pl-head{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.pl-head h2{margin:0;font-size:20px;font-weight:600;letter-spacing:-.015em;display:flex;align-items:center;gap:10px;min-width:0;overflow-wrap:anywhere}
+.pl-head .dot{width:10px;height:10px;border-radius:50%;background:var(--c)}
+.pl-head .sp{flex:1}
+.pl-end{display:flex;align-items:center;gap:8px;font-size:15px;color:var(--muted)}
+.pl-end input{font:15px var(--ui);color:var(--fg);background:var(--paper);border:0;box-shadow:inset 0 0 0 1px var(--line);border-radius:9px;padding:7px 10px}
+.pl-body{display:grid;grid-template-columns:230px minmax(0,1fr);gap:22px;align-items:start}
+.tray{position:sticky;top:0;z-index:2;background:var(--paper);border-radius:6px;box-shadow:var(--sheet);padding:14px 12px;display:flex;flex-direction:column;gap:10px}
+.tray-h{font-size:15px;font-weight:600;display:flex;justify-content:space-between}
+.tray-h span{color:var(--muted);font-weight:400}
+.tray ul{min-height:80px;border-radius:6px}
+.tray-hint,.tray-empty{margin:0;font-size:14px;color:var(--muted)}
+ul.drop{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:5px}
+.cal{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:6px}
+.wd{font-size:13.5px;color:var(--muted);padding:0 6px 2px}
+.cd{background:var(--paper);border-radius:6px;box-shadow:var(--sheet);min-height:120px;padding:7px 6px;display:flex;flex-direction:column;gap:5px;min-width:0}
+.cd.we{background:color-mix(in srgb,var(--paper) 70%,var(--desk))}
+.cd.off{background:transparent;box-shadow:none}
+.cd.today{box-shadow:0 0 0 1.5px var(--fg)}
+.cd.dead{box-shadow:0 0 0 1.5px var(--warn)}
+.cd-h{display:flex;gap:4px;align-items:baseline;font-size:14px;color:var(--muted);padding:0 3px;flex-wrap:wrap}
+.cd-h b{font-weight:600;color:var(--fg);font-variant-numeric:tabular-nums}
+.cd-h .wdn{display:none}
+.tag{font-size:12.5px;color:var(--fg);margin-left:auto}
+.tag.dl{color:var(--warn)}
+.cd ul.drop{flex:1;min-height:44px}
+.pchip{display:flex;align-items:center;gap:7px;background:var(--paper);box-shadow:inset 3px 0 0 var(--c,var(--fg)),0 0 0 1px var(--line);border-radius:6px;padding:6px 8px 6px 9px;font-size:14.5px;cursor:grab;user-select:none;-webkit-user-select:none;min-width:0}
+.pchip:hover{box-shadow:inset 3px 0 0 var(--c,var(--fg)),0 0 0 1px var(--faint)}
+.pchip .pt{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pchip .pt i{color:var(--faint)}
+.pchip .pc{font-size:12.5px;color:var(--muted);white-space:nowrap;font-variant-numeric:tabular-nums}
+.pchip.done .pt{color:var(--faint);text-decoration:line-through}
+.pchip.late{box-shadow:inset 3px 0 0 var(--warn),0 0 0 1px var(--line)}
+.pchip.late .pc:last-child{color:var(--warn)}
+.pcb{all:unset;flex:none;cursor:pointer;width:15px;height:15px;border:1.5px solid var(--faint);border-radius:4px;display:grid;place-items:center}
+.pcb svg{color:var(--paper);width:9px;height:9px}
+.pcb svg path{stroke-dasharray:14;stroke-dashoffset:14}
+.pchip.done .pcb{background:var(--c,var(--fg));border-color:var(--c,var(--fg))}
+.pchip.done .pcb svg path{stroke-dashoffset:0}
+.pchip.sortable-ghost{opacity:.35}
+.oth{display:flex;flex-direction:column;gap:2px;padding:0 3px}
+.other{font-size:12.5px;color:var(--muted);display:flex;gap:5px;align-items:center;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.other i{width:6px;height:6px;border-radius:50%;background:var(--c);flex:none}
+.other.done{color:var(--faint);text-decoration:line-through}
+.other.dl{color:var(--fg)}
+@media (max-width:760px){
+  .pl-body{grid-template-columns:minmax(0,1fr);gap:14px}
+  .tray{max-height:38vh;overflow:auto}
+  .tray ul{min-height:44px}
+  .cal{grid-template-columns:minmax(0,1fr)}
+  .wd,.cd.off{display:none}
+  .cd{min-height:0}
+  .cd-h .wdn{display:inline;text-transform:capitalize}
+}
 #toast{position:fixed;z-index:70;left:50%;transform:translateX(-50%);bottom:calc(22px + env(safe-area-inset-bottom,0px));background:var(--fg);color:var(--paper);border-radius:999px;box-shadow:var(--shadow)}
 #toast button{all:unset;cursor:pointer;font-size:15px;font-weight:500;padding:10px 20px;display:block}
 
@@ -229,6 +287,7 @@ body.dragging{user-select:none;-webkit-user-select:none;cursor:grabbing}
 <div id="toast" hidden></div>
 <div id="syncbar" hidden></div>
 <div id="menu" hidden></div>
+<div id="planner" hidden></div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Sortable/1.15.2/Sortable.min.js"></script>
 <script>
@@ -474,6 +533,7 @@ function render(){
   }
   lastCols = nCols();
   bindAll(); save(); applyFocus();
+  if (planId) renderPlanner();
 }
 function renderPills(){
   pills.innerHTML = `<button class="pill ${S.filter==='all'?'on':''}" data-act="filter" data-id="all">Todos</button>` +
@@ -802,6 +862,106 @@ function openSheet(){
 }
 $('#sheet').addEventListener('click', e => { if (e.target.id === 'sheet') $('#sheet').hidden = true; });
 
+/* ---------- planner: spread a sheet's main tasks over the days up to its deadline ---------- */
+let planId = null;
+const addTo = (s, n) => { const d = parse(s); d.setDate(d.getDate() + n); return iso(d); };
+function planRange(p){
+  const start = iso(addDays(0));
+  let end = p.planEnd || p.date || addTo(start, 13);
+  if (end < start) end = start;
+  return { start, end, deadline:p.planEnd ? '' : (p.date || '') };
+}
+function openPlanner(id){ planId = id; $('#planner').hidden = false; document.documentElement.classList.add('noscroll'); renderPlanner(); $('#planner').scrollTop = 0; }
+function closePlanner(){ planId = null; const el = $('#planner'); el.hidden = true; el.innerHTML = ''; document.documentElement.classList.remove('noscroll'); }
+function planTops(p){
+  return p.items.map((x, i) => ({ x, i })).filter(o => !o.x.lvl).map(o => {
+    const e = blockEnd(p.items, o.i), kids = p.items.slice(o.i + 1, e);
+    return { ...o, t:kids.length, d:kids.filter(k => k.done).length };
+  });
+}
+function planChip(o, start){
+  const late = o.x.date && o.x.date < start && !o.x.done;
+  return `<li class="pchip ${o.x.done?'done':''} ${late?'late':''}" data-id="${o.x.id}">
+    <button class="pcb" data-act="planCheck" data-id="${o.x.id}" aria-label="Marcar">${I.check}</button>
+    <span class="pt">${esc(o.x.t) || '<i>Sin texto</i>'}</span>${o.t ? `<span class="pc">${o.d}/${o.t}</span>` : ''}${late ? `<span class="pc">${shortDate(o.x.date)}</span>` : ''}
+  </li>`;
+}
+function renderPlanner(){
+  const p = P(planId); if (!p) { closePlanner(); return; }
+  const el = $('#planner'), s = subj(p.subject), { start, end, deadline } = planRange(p);
+  const tops = planTops(p);
+  const inRange = d => d && d >= start && d <= end;
+  const tray = tops.filter(o => !inRange(o.x.date) && !(o.x.done && o.x.date && o.x.date < start));
+  const byDay = {}; tops.forEach(o => { if (inRange(o.x.date)) (byDay[o.x.date] = byDay[o.x.date] || []).push(o); });
+  // what else is on each day (other sheets), shown faintly so the load is visible
+  const others = {};
+  for (const q of S.papers) {
+    const qs = subj(q.subject), name = q.title.trim() || qs?.name || 'Papel';
+    if (q.id !== p.id && inRange(q.date)) (others[q.date] = others[q.date] || []).push({ t:'Fecha: ' + name, c:qs?.color, dead:true });
+    if (q.id === p.id) continue;
+    q.items.forEach(x => { if (inRange(x.date)) (others[x.date] = others[x.date] || []).push({ t:x.t, c:qs?.color, done:x.done }); });
+  }
+  const dow = s0 => (parse(s0).getDay() + 6) % 7;
+  const gStart = addTo(start, -dow(start)), gEnd = addTo(end, 6 - dow(end));
+  const today = start, cells = [];
+  for (let d = gStart; d <= gEnd; d = addTo(d, 1)) {
+    if (d < start || d > end) { cells.push(`<div class="cd off"></div>`); continue; }
+    const dt = parse(d), first = d === start || dt.getDate() === 1;
+    const label = `<b>${dt.getDate()}</b>${first ? ` ${dt.toLocaleDateString('es', { month:'short' }).replace('.','')}` : ''}`;
+    const wd = dt.toLocaleDateString('es', { weekday:'short' }).replace('.','');
+    const mine = byDay[d] || [], oth = others[d] || [];
+    cells.push(`<div class="cd ${d===today?'today':''} ${d===deadline?'dead':''} ${dt.getDay()%6===0?'we':''}">
+      <div class="cd-h"><span class="wdn">${wd}</span>${label}${d===today ? '<span class="tag">Hoy</span>' : ''}${d===deadline ? '<span class="tag dl">Fecha límite</span>' : ''}</div>
+      <ul class="drop" data-date="${d}">${mine.map(o => planChip(o, start)).join('')}</ul>
+      ${oth.length ? `<div class="oth">${oth.map(o => `<span class="other ${o.done?'done':''} ${o.dead?'dl':''}" style="--c:${o.c || 'var(--faint)'}"><i></i>${esc(o.t)}</span>`).join('')}</div>` : ''}
+    </div>`);
+  }
+  const nDays = Math.round((parse(end) - parse(start)) / 864e5) + 1;
+  el.innerHTML = `<div class="pl-wrap" ${s ? `style="--c:${s.color}"` : ''}>
+    <header class="pl-head">
+      <button class="round" data-act="planClose" aria-label="Volver"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M10 3 5 8l5 5"/></svg></button>
+      <h2>${s ? '<i class="dot"></i>' : ''}${esc(p.title.trim() || s?.name || 'Papel')}</h2>
+      <span class="sp"></span>
+      <label class="pl-end">Hasta <input type="date" id="planEnd" value="${end}" min="${start}"></label>
+      <button class="btn ghostb" data-act="planAuto">Repartir solo</button>
+      <button class="btn ghostb" data-act="planClear">Quitar del calendario</button>
+    </header>
+    <div class="pl-body">
+      <aside class="tray">
+        <div class="tray-h">Por repartir <span>${tray.filter(o => !o.x.done).length}</span></div>
+        <ul class="drop" data-date="">${tray.map(o => planChip(o, start)).join('')}</ul>
+        ${tops.length ? '' : '<p class="tray-empty">Este papel aún no tiene tareas.</p>'}
+        <p class="tray-hint">${nDays} ${nDays === 1 ? 'día' : 'días'}. Arrastra cada tarea al día en que quieras hacerla.</p>
+      </aside>
+      <div class="cal">
+        ${['lun','mar','mié','jue','vie','sáb','dom'].map(w => `<div class="wd">${w}</div>`).join('')}
+        ${cells.join('')}
+      </div>
+    </div>
+  </div>`;
+  if (!window.Sortable) return;
+  el.querySelectorAll('ul.drop').forEach(ul => Sortable.create(ul, {
+    group:'plan', draggable:'.pchip', animation:150, delay:150, delayOnTouchOnly:true, filter:'.pcb', preventOnFilter:false,
+    onEnd(ev){
+      if (ev.from === ev.to) return;
+      const f = findItem(ev.item.dataset.id); if (!f.it) return;
+      f.it.date = ev.to.dataset.date || '';
+      render();
+    }
+  }));
+}
+function planAuto(){
+  const p = P(planId), { start, end, deadline } = planRange(p);
+  const days = []; for (let d = start; d <= end; d = addTo(d, 1)) if (d !== deadline) days.push(d);
+  if (!days.length) days.push(start);
+  const todo = planTops(p).filter(o => !o.x.done && !(o.x.date && o.x.date >= start && o.x.date <= end));
+  if (!todo.length) return;
+  const used = new Set(planTops(p).filter(o => o.x.date).map(o => o.x.date));
+  const free = days.filter(d => !used.has(d)), pool = free.length >= todo.length ? free : days;
+  todo.forEach((o, k) => o.x.date = pool[Math.floor(k * pool.length / todo.length)]);
+  render();
+}
+
 /* ---------- actions ---------- */
 const A = {
   filter(id){ S.filter = id; render(); },
@@ -819,6 +979,15 @@ const A = {
   pDelete(id){ hideMenu(); snap(); S.papers = S.papers.filter(p => p.id !== id); render(); toast(); },
   pMenu(id, b){ const r = b.getBoundingClientRect(); paperMenu(id, r.left, r.bottom); },
   pDup(id){ hideMenu(); dupPaper(id); },
+  planOpen(id){ hideMenu(); openPlanner(id); },
+  planClose(){ closePlanner(); },
+  planAuto(){ planAuto(); },
+  planClear(){
+    const p = P(planId), { start, end } = planRange(p);
+    p.items.forEach(x => { if (!x.lvl && x.date && x.date >= start && x.date <= end) x.date = ''; });
+    render(); toast();
+  },
+  planCheck(id){ toggle(id); renderPlanner(); },
   pFold(id){ hideMenu(); const p = P(id); p.fold = !p.fold; updatePaper(id); },
   pHideDone(id){ hideMenu(); const p = P(id); p.hideDone = !p.hideDone; updatePaper(id); },
   pFoldAll(id){
@@ -912,6 +1081,11 @@ board.addEventListener('click', e => {
   e.preventDefault(); openDate(inp);
 });
 document.addEventListener('change', e => {
+  if (e.target.id === 'planEnd') {
+    const p = P(planId), v = e.target.value;
+    if (p) { p.planEnd = v && v !== p.date ? v : ''; render(); }
+    return;
+  }
   if (e.target.id === 'itemDate') { const { it, p } = findItem(e.target.dataset.id); if (it) { it.date = e.target.value || ''; hideMenu(); updatePaper(p.id); } return; }
   if (!e.target.matches?.('.dt')) return;
   const p = P(e.target.dataset.id); p.date = e.target.value || ''; updatePaper(p.id);
@@ -938,7 +1112,9 @@ function openMenu(sid, x, y){
 function paperMenu(id, x, y){
   const p = P(id), any = p.items.length, anyDone = p.items.some(x => x.done);
   const parents = p.items.some((x, i) => blockEnd(p.items, i) > i + 1), allFolded = parents && p.items.every((x, i) => blockEnd(p.items, i) === i + 1 || x.fold);
-  showMenu(`<button class="mi" data-act="pFold" data-id="${id}">${p.fold ? 'Desplegar papel' : 'Plegar papel'}</button>
+  showMenu(`<button class="mi" data-act="planOpen" data-id="${id}">Repartir en calendario</button>
+    <div class="msep"></div>
+    <button class="mi" data-act="pFold" data-id="${id}">${p.fold ? 'Desplegar papel' : 'Plegar papel'}</button>
     ${parents && !p.fold ? `<button class="mi" data-act="pFoldAll" data-id="${id}">${allFolded ? 'Desplegar subapartados' : 'Plegar subapartados'}</button>` : ''}
     ${anyDone || p.hideDone ? `<button class="mi" data-act="pHideDone" data-id="${id}">${p.hideDone ? 'Mostrar hechas' : 'Ocultar hechas'}</button>` : ''}
     <div class="msep"></div>
@@ -1107,7 +1283,7 @@ document.addEventListener('keydown', e => {
 }, true);
 document.addEventListener('keydown', e => {
   const el = e.target;
-  if (e.key === 'Escape') { if (!menu.hidden) hideMenu(); else if (!$('#sheet').hidden) $('#sheet').hidden = true; else el.blur?.(); return; }
+  if (e.key === 'Escape') { if (!menu.hidden) hideMenu(); else if (planId && !el.matches?.('input')) closePlanner(); else if (!$('#sheet').hidden) $('#sheet').hidden = true; else el.blur?.(); return; }
   if (el.matches?.('[data-edit="title"]') && e.key === 'Enter') {
     e.preventDefault(); const p = P(el.dataset.id);
     if (p.items.length) { pendingFocus = { sel:`[data-edit="item"][data-id="${p.items[0].id}"]`, caret:'end' }; applyFocus(); } else addItem(p.id, null, 0);
@@ -1125,7 +1301,7 @@ document.addEventListener('keydown', e => {
     if (sm && +sm[3] > +sm[2] && +sm[3] - +sm[2] <= 60) {
       const [, pre, a, b] = sm, list = [];
       for (let n = +a; n <= +b; n++) list.push(n === +a ? Object.assign(it, { t:pre + n }) : It(pre + n, it.lvl));
-      p.items.splice(i, 1, ...list);
+      p.items.splice(i, 1, ...list); el.textContent = list[0].t; editOrig.delete(id);
       pendingFocus = { sel:`[data-edit="item"][data-id="${list[list.length-1].id}"]`, caret:'end' }; updatePaper(p.id); return;
     }
     it.t = v; commitLine(id, v);
