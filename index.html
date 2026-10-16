@@ -217,7 +217,7 @@ html.noscroll,html.noscroll body{overflow:hidden}
 .tray{position:sticky;top:0;z-index:2;background:var(--paper);border-radius:6px;box-shadow:var(--sheet);padding:14px 12px;display:flex;flex-direction:column;gap:10px}
 .tray-h{font-size:15px;font-weight:600;display:flex;justify-content:space-between}
 .tray-h span{color:var(--muted);font-weight:400}
-.tray ul{min-height:80px;border-radius:6px}
+.tray ul{min-height:40px;border-radius:6px}
 .tray-hint,.tray-empty{margin:0;font-size:14px;color:var(--muted)}
 ul.drop{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:5px}
 .cal{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:6px}
@@ -226,12 +226,25 @@ ul.drop{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;ga
 .cd.we{background:color-mix(in srgb,var(--paper) 70%,var(--desk))}
 .cd.off{background:transparent;box-shadow:none}
 .cd.today{box-shadow:0 0 0 1.5px var(--fg)}
-.cd.dead{box-shadow:0 0 0 1.5px var(--warn)}
+.cd.dead{box-shadow:0 0 0 1.5px var(--dc,var(--warn))}
 .cd-h{display:flex;gap:4px;align-items:baseline;font-size:14px;color:var(--muted);padding:0 3px;flex-wrap:wrap}
 .cd-h b{font-weight:600;color:var(--fg);font-variant-numeric:tabular-nums}
 .cd-h .wdn{display:none}
 .tag{font-size:12.5px;color:var(--fg);margin-left:auto}
-.tag.dl{color:var(--warn)}
+.mark{font-size:13px;font-weight:600;color:var(--c);padding:0 3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pl-papers{display:flex;flex-wrap:wrap;gap:6px}
+.ppill{all:unset;box-sizing:border-box;cursor:pointer;display:inline-flex;align-items:center;gap:7px;height:32px;padding:0 12px;border-radius:999px;font-size:14.5px;color:var(--muted);box-shadow:inset 0 0 0 1px var(--line)}
+.ppill i{width:8px;height:8px;border-radius:50%;background:var(--c,var(--faint))}
+.ppill span{font-size:13px;color:var(--faint)}
+.ppill:hover{color:var(--fg)}
+.ppill.on{background:var(--paper);color:var(--fg);box-shadow:var(--sheet)}
+.ppill.on span{color:var(--muted)}
+.tray-g{display:flex;flex-direction:column;gap:6px}
+.tg-h{display:flex;align-items:center;gap:7px;font-size:14px;font-weight:500;color:var(--fg);min-width:0}
+.tg-h i{width:8px;height:8px;border-radius:50%;background:var(--c,var(--faint));flex:none}
+.tg-h span{margin-left:auto;font-weight:400;font-size:13px;color:var(--muted)}
+.pbody{flex:1;min-width:0;display:flex;flex-direction:column}
+.pn{font-size:12px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .cd ul.drop{flex:1;min-height:44px}
 .pchip{display:flex;align-items:center;gap:7px;background:var(--paper);box-shadow:inset 3px 0 0 var(--c,var(--fg)),0 0 0 1px var(--line);border-radius:6px;padding:6px 8px 6px 9px;font-size:14.5px;cursor:grab;user-select:none;-webkit-user-select:none;min-width:0}
 .pchip:hover{box-shadow:inset 3px 0 0 var(--c,var(--fg)),0 0 0 1px var(--faint)}
@@ -240,7 +253,7 @@ ul.drop{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;ga
 .pchip .pc{font-size:12.5px;color:var(--muted);white-space:nowrap;font-variant-numeric:tabular-nums}
 .pchip.done .pt{color:var(--faint);text-decoration:line-through}
 .pchip.late{box-shadow:inset 3px 0 0 var(--warn),0 0 0 1px var(--line)}
-.pchip.late .pc:last-child{color:var(--warn)}
+.pchip .pc.lt{color:var(--warn)}
 .pcb{all:unset;flex:none;cursor:pointer;width:15px;height:15px;border:1.5px solid var(--faint);border-radius:4px;display:grid;place-items:center}
 .pcb svg{color:var(--paper);width:9px;height:9px}
 .pcb svg path{stroke-dasharray:14;stroke-dashoffset:14}
@@ -278,6 +291,7 @@ ul.drop{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;ga
   <header class="top">
     <div class="pills" id="pills"></div>
     <button class="round cloud" id="cloud" data-act="settings" hidden data-state="wait"><svg width="19" height="19" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6 15.5h8.5a3.5 3.5 0 0 0 .4-7A5 5 0 0 0 5.2 9.3 3.1 3.1 0 0 0 6 15.5Z"/><path class="ok" d="m7.8 11.6 1.7 1.6 3-3.2"/><path class="x" d="M3 3l14 14"/></svg></button>
+    <button class="round" data-act="planOpen" aria-label="Calendario"><svg width="17" height="17" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><rect x="2.5" y="3.5" width="11" height="10" rx="2"/><path d="M2.5 6.5h11M5.5 2v3M10.5 2v3"/></svg></button>
     <button class="round" data-act="settings" aria-label="Ajustes"><svg width="17" height="17" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M2 4h7M13 4h1M2 12h1M7 12h7"/><circle cx="11" cy="4" r="1.8"/><circle cx="5" cy="12" r="1.8"/></svg></button>
     <button class="round new" data-act="newPaper" aria-label="Nuevo papel"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M8 3v10M3 8h10"/></svg></button>
   </header>
@@ -862,16 +876,31 @@ function openSheet(){
 }
 $('#sheet').addEventListener('click', e => { if (e.target.id === 'sheet') $('#sheet').hidden = true; });
 
-/* ---------- planner: spread a sheet's main tasks over the days up to its deadline ---------- */
-let planId = null;
+/* ---------- calendar: spread the main tasks of several sheets over the days up to their dates ---------- */
+let planId = null; // truthy while the calendar is open
 const addTo = (s, n) => { const d = parse(s); d.setDate(d.getDate() + n); return iso(d); };
-function planRange(p){
-  const start = iso(addDays(0));
-  let end = p.planEnd || p.date || addTo(start, 13);
-  if (end < start) end = start;
-  return { start, end, deadline:p.planEnd ? '' : (p.date || '') };
+const pName = q => q.title.trim() || subj(q.subject)?.name || 'Papel';
+function planSel(){
+  const today = iso(addDays(0));
+  if (!Array.isArray(S.planIds)) S.planIds = S.papers.filter(q => q.date && q.date >= today).map(q => q.id);
+  S.planIds = S.planIds.filter(id => P(id));
+  return S.papers.filter(q => S.planIds.includes(q.id));
 }
-function openPlanner(id){ planId = id; $('#planner').hidden = false; document.documentElement.classList.add('noscroll'); renderPlanner(); $('#planner').scrollTop = 0; }
+function planDefaultEnd(){
+  const start = iso(addDays(0)), dates = planSel().map(q => q.date).filter(d => d && d >= start).sort();
+  return dates.length ? dates[dates.length - 1] : addTo(start, 13);
+}
+function planRange(){
+  const start = iso(addDays(0));
+  let end = S.planEnd || planDefaultEnd();
+  if (end < start) end = start;
+  return { start, end };
+}
+function openPlanner(id){
+  planSel(); if (id && !S.planIds.includes(id)) S.planIds.push(id);
+  planId = true; $('#planner').hidden = false; document.documentElement.classList.add('noscroll');
+  renderPlanner(); $('#planner').scrollTop = 0; save();
+}
 function closePlanner(){ planId = null; const el = $('#planner'); el.hidden = true; el.innerHTML = ''; document.documentElement.classList.remove('noscroll'); }
 function planTops(p){
   return p.items.map((x, i) => ({ x, i })).filter(o => !o.x.lvl).map(o => {
@@ -879,59 +908,62 @@ function planTops(p){
     return { ...o, t:kids.length, d:kids.filter(k => k.done).length };
   });
 }
-function planChip(o, start){
-  const late = o.x.date && o.x.date < start && !o.x.done;
-  return `<li class="pchip ${o.x.done?'done':''} ${late?'late':''}" data-id="${o.x.id}">
+function planChip(o, q, start, showName){
+  const late = o.x.date && o.x.date < start && !o.x.done, c = subj(q.subject)?.color;
+  return `<li class="pchip ${o.x.done?'done':''} ${late?'late':''}" data-id="${o.x.id}" ${c ? `style="--c:${c}"` : ''} title="${esc(pName(q))}">
     <button class="pcb" data-act="planCheck" data-id="${o.x.id}" aria-label="Marcar">${I.check}</button>
-    <span class="pt">${esc(o.x.t) || '<i>Sin texto</i>'}</span>${o.t ? `<span class="pc">${o.d}/${o.t}</span>` : ''}${late ? `<span class="pc">${shortDate(o.x.date)}</span>` : ''}
+    <span class="pbody"><span class="pt">${esc(o.x.t) || '<i>Sin texto</i>'}</span>${showName ? `<span class="pn">${esc(pName(q))}</span>` : ''}</span>${o.t ? `<span class="pc">${o.d}/${o.t}</span>` : ''}${late ? `<span class="pc lt">${shortDate(o.x.date)}</span>` : ''}
   </li>`;
 }
 function renderPlanner(){
-  const p = P(planId); if (!p) { closePlanner(); return; }
-  const el = $('#planner'), s = subj(p.subject), { start, end, deadline } = planRange(p);
-  const tops = planTops(p);
-  const inRange = d => d && d >= start && d <= end;
-  const tray = tops.filter(o => !inRange(o.x.date) && !(o.x.done && o.x.date && o.x.date < start));
-  const byDay = {}; tops.forEach(o => { if (inRange(o.x.date)) (byDay[o.x.date] = byDay[o.x.date] || []).push(o); });
-  // what else is on each day (other sheets), shown faintly so the load is visible
-  const others = {};
-  for (const q of S.papers) {
-    const qs = subj(q.subject), name = q.title.trim() || qs?.name || 'Papel';
-    if (q.id !== p.id && inRange(q.date)) (others[q.date] = others[q.date] || []).push({ t:'Fecha: ' + name, c:qs?.color, dead:true });
-    if (q.id === p.id) continue;
-    q.items.forEach(x => { if (inRange(x.date)) (others[x.date] = others[x.date] || []).push({ t:x.t, c:qs?.color, done:x.done }); });
+  const el = $('#planner'), { start, end } = planRange(), sel = planSel(), selIds = new Set(sel.map(q => q.id));
+  const inRange = d => d && d >= start && d <= end, multi = sel.length > 1;
+  const groups = [], byDay = {}, others = {}, marks = {};
+  for (const q of sel) {
+    const tops = planTops(q);
+    groups.push({ q, tray:tops.filter(o => !inRange(o.x.date) && !o.x.done), n:tops.length });
+    tops.forEach(o => { if (inRange(o.x.date)) (byDay[o.x.date] = byDay[o.x.date] || []).push(planChip(o, q, start, multi)); });
+    if (inRange(q.date)) (marks[q.date] = marks[q.date] || []).push(q);
   }
-  const dow = s0 => (parse(s0).getDay() + 6) % 7;
-  const gStart = addTo(start, -dow(start)), gEnd = addTo(end, 6 - dow(end));
-  const today = start, cells = [];
+  for (const q of S.papers) {
+    if (selIds.has(q.id)) continue;
+    const c = subj(q.subject)?.color;
+    if (inRange(q.date)) (others[q.date] = others[q.date] || []).push({ t:pName(q), c, dl:true });
+    q.items.forEach(x => { if (inRange(x.date)) (others[x.date] = others[x.date] || []).push({ t:x.t, c, done:x.done }); });
+  }
+  const dow = d => (parse(d).getDay() + 6) % 7, gStart = addTo(start, -dow(start)), gEnd = addTo(end, 6 - dow(end));
+  const cells = [];
   for (let d = gStart; d <= gEnd; d = addTo(d, 1)) {
     if (d < start || d > end) { cells.push(`<div class="cd off"></div>`); continue; }
-    const dt = parse(d), first = d === start || dt.getDate() === 1;
-    const label = `<b>${dt.getDate()}</b>${first ? ` ${dt.toLocaleDateString('es', { month:'short' }).replace('.','')}` : ''}`;
-    const wd = dt.toLocaleDateString('es', { weekday:'short' }).replace('.','');
-    const mine = byDay[d] || [], oth = others[d] || [];
-    cells.push(`<div class="cd ${d===today?'today':''} ${d===deadline?'dead':''} ${dt.getDay()%6===0?'we':''}">
-      <div class="cd-h"><span class="wdn">${wd}</span>${label}${d===today ? '<span class="tag">Hoy</span>' : ''}${d===deadline ? '<span class="tag dl">Fecha límite</span>' : ''}</div>
-      <ul class="drop" data-date="${d}">${mine.map(o => planChip(o, start)).join('')}</ul>
-      ${oth.length ? `<div class="oth">${oth.map(o => `<span class="other ${o.done?'done':''} ${o.dead?'dl':''}" style="--c:${o.c || 'var(--faint)'}"><i></i>${esc(o.t)}</span>`).join('')}</div>` : ''}
+    const dt = parse(d), first = d === start || dt.getDate() === 1, mk = marks[d] || [];
+    const dc = mk.length ? subj(mk[0].subject)?.color || 'var(--warn)' : '';
+    cells.push(`<div class="cd ${d===start?'today':''} ${mk.length?'dead':''} ${dt.getDay()%6===0?'we':''}" ${dc ? `style="--dc:${dc}"` : ''}>
+      <div class="cd-h"><span class="wdn">${dt.toLocaleDateString('es', { weekday:'short' }).replace('.','')}</span><b>${dt.getDate()}</b>${first ? ' ' + dt.toLocaleDateString('es', { month:'short' }).replace('.','') : ''}${d===start ? '<span class="tag">Hoy</span>' : ''}</div>
+      ${mk.map(q => `<div class="mark" style="--c:${subj(q.subject)?.color || 'var(--warn)'}">${esc(pName(q))}</div>`).join('')}
+      <ul class="drop" data-date="${d}">${(byDay[d] || []).join('')}</ul>
+      ${(others[d] || []).length ? `<div class="oth">${others[d].map(o => `<span class="other ${o.done?'done':''} ${o.dl?'dl':''}" style="--c:${o.c || 'var(--faint)'}"><i></i>${esc(o.t)}</span>`).join('')}</div>` : ''}
     </div>`);
   }
-  const nDays = Math.round((parse(end) - parse(start)) / 864e5) + 1;
-  el.innerHTML = `<div class="pl-wrap" ${s ? `style="--c:${s.color}"` : ''}>
+  const pending = groups.reduce((n, g) => n + g.tray.filter(o => !o.x.done).length, 0);
+  el.innerHTML = `<div class="pl-wrap">
     <header class="pl-head">
       <button class="round" data-act="planClose" aria-label="Volver"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M10 3 5 8l5 5"/></svg></button>
-      <h2>${s ? '<i class="dot"></i>' : ''}${esc(p.title.trim() || s?.name || 'Papel')}</h2>
+      <h2>Calendario</h2>
       <span class="sp"></span>
       <label class="pl-end">Hasta <input type="date" id="planEnd" value="${end}" min="${start}"></label>
       <button class="btn ghostb" data-act="planAuto">Repartir solo</button>
       <button class="btn ghostb" data-act="planClear">Quitar del calendario</button>
     </header>
+    <div class="pl-papers">${S.papers.map(q => { const c = subj(q.subject)?.color; return `<button class="ppill ${selIds.has(q.id)?'on':''}" data-act="planToggle" data-id="${q.id}" ${c ? `style="--c:${c}"` : ''}><i></i>${esc(pName(q))}${q.date ? `<span>${shortDate(q.date)}</span>` : ''}</button>`; }).join('')}</div>
     <div class="pl-body">
       <aside class="tray">
-        <div class="tray-h">Por repartir <span>${tray.filter(o => !o.x.done).length}</span></div>
-        <ul class="drop" data-date="">${tray.map(o => planChip(o, start)).join('')}</ul>
-        ${tops.length ? '' : '<p class="tray-empty">Este papel aún no tiene tareas.</p>'}
-        <p class="tray-hint">${nDays} ${nDays === 1 ? 'día' : 'días'}. Arrastra cada tarea al día en que quieras hacerla.</p>
+        <div class="tray-h">Por repartir <span>${pending}</span></div>
+        ${groups.map(g => { const c = subj(g.q.subject)?.color; return `<div class="tray-g" ${c ? `style="--c:${c}"` : ''}>
+          <div class="tg-h"><i></i>${esc(pName(g.q))}${g.q.date ? `<span>${shortDate(g.q.date)}</span>` : ''}</div>
+          <ul class="drop" data-date="">${g.tray.map(o => planChip(o, g.q, start, false)).join('')}</ul>
+          ${!g.n ? '<p class="tray-empty">Sin tareas.</p>' : ''}
+        </div>`; }).join('')}
+        ${sel.length ? '<p class="tray-hint">Arrastra cada tarea al día en que quieras hacerla.</p>' : '<p class="tray-hint">Elige arriba los papeles que quieres repartir.</p>'}
       </aside>
       <div class="cal">
         ${['lun','mar','mié','jue','vie','sáb','dom'].map(w => `<div class="wd">${w}</div>`).join('')}
@@ -943,7 +975,7 @@ function renderPlanner(){
   el.querySelectorAll('ul.drop').forEach(ul => Sortable.create(ul, {
     group:'plan', draggable:'.pchip', animation:150, delay:150, delayOnTouchOnly:true, filter:'.pcb', preventOnFilter:false,
     onEnd(ev){
-      if (ev.from === ev.to) return;
+      if (ev.from === ev.to && ev.to.dataset.date !== undefined && ev.from.dataset.date === ev.to.dataset.date) return;
       const f = findItem(ev.item.dataset.id); if (!f.it) return;
       f.it.date = ev.to.dataset.date || '';
       render();
@@ -951,15 +983,22 @@ function renderPlanner(){
   }));
 }
 function planAuto(){
-  const p = P(planId), { start, end, deadline } = planRange(p);
-  const days = []; for (let d = start; d <= end; d = addTo(d, 1)) if (d !== deadline) days.push(d);
-  if (!days.length) days.push(start);
-  const todo = planTops(p).filter(o => !o.x.done && !(o.x.date && o.x.date >= start && o.x.date <= end));
-  if (!todo.length) return;
-  const used = new Set(planTops(p).filter(o => o.x.date).map(o => o.x.date));
-  const free = days.filter(d => !used.has(d)), pool = free.length >= todo.length ? free : days;
-  todo.forEach((o, k) => o.x.date = pool[Math.floor(k * pool.length / todo.length)]);
-  render();
+  const { start, end } = planRange(), sel = planSel(), load = {};
+  const inR = d => d && d >= start && d <= end;
+  S.papers.forEach(q => q.items.forEach(x => { if (inR(x.date)) load[x.date] = (load[x.date] || 0) + 1; }));
+  let moved = 0;
+  sel.forEach(q => {
+    let last = q.date && q.date > start && q.date <= end ? addTo(q.date, -1) : end;
+    const days = []; for (let d = start; d <= last; d = addTo(d, 1)) days.push(d);
+    if (!days.length) days.push(start);
+    const todo = planTops(q).filter(o => !o.x.done && !inR(o.x.date));
+    todo.forEach((o, k) => {
+      const a = Math.floor(k * days.length / todo.length), b = Math.max(a + 1, Math.floor((k + 1) * days.length / todo.length));
+      let best = days[a]; for (let j = a; j < b; j++) if ((load[days[j]] || 0) < (load[best] || 0)) best = days[j];
+      o.x.date = best; load[best] = (load[best] || 0) + 1; moved++;
+    });
+  });
+  if (moved) render();
 }
 
 /* ---------- actions ---------- */
@@ -980,11 +1019,12 @@ const A = {
   pMenu(id, b){ const r = b.getBoundingClientRect(); paperMenu(id, r.left, r.bottom); },
   pDup(id){ hideMenu(); dupPaper(id); },
   planOpen(id){ hideMenu(); openPlanner(id); },
+  planToggle(id){ planSel(); S.planIds = S.planIds.includes(id) ? S.planIds.filter(x => x !== id) : [...S.planIds, id]; render(); },
   planClose(){ closePlanner(); },
   planAuto(){ planAuto(); },
   planClear(){
-    const p = P(planId), { start, end } = planRange(p);
-    p.items.forEach(x => { if (!x.lvl && x.date && x.date >= start && x.date <= end) x.date = ''; });
+    const { start, end } = planRange();
+    planSel().forEach(p => p.items.forEach(x => { if (!x.lvl && x.date && x.date >= start && x.date <= end) x.date = ''; }));
     render(); toast();
   },
   planCheck(id){ toggle(id); renderPlanner(); },
@@ -1082,8 +1122,7 @@ board.addEventListener('click', e => {
 });
 document.addEventListener('change', e => {
   if (e.target.id === 'planEnd') {
-    const p = P(planId), v = e.target.value;
-    if (p) { p.planEnd = v && v !== p.date ? v : ''; render(); }
+    const v = e.target.value; S.planEnd = v && v !== planDefaultEnd() ? v : ''; render();
     return;
   }
   if (e.target.id === 'itemDate') { const { it, p } = findItem(e.target.dataset.id); if (it) { it.date = e.target.value || ''; hideMenu(); updatePaper(p.id); } return; }
