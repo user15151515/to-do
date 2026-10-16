@@ -227,6 +227,7 @@ ul.drop{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;ga
 .cd.off{background:transparent;box-shadow:none}
 .cd.today{box-shadow:0 0 0 1.5px var(--fg)}
 .cd.dead{box-shadow:0 0 0 1.5px var(--dc,var(--warn))}
+.cal:not(.has-sel) .cd ul.drop{flex:0;min-height:0}
 .cd-h{display:flex;gap:4px;align-items:baseline;font-size:14px;color:var(--muted);padding:0 3px;flex-wrap:wrap}
 .cd-h b{font-weight:600;color:var(--fg);font-variant-numeric:tabular-nums}
 .cd-h .wdn{display:none}
@@ -245,7 +246,8 @@ ul.drop{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;ga
 .tg-h span{margin-left:auto;font-weight:400;font-size:13px;color:var(--muted)}
 .pbody{flex:1;min-width:0;display:flex;flex-direction:column}
 .pn{font-size:12px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.cd ul.drop{flex:1;min-height:44px}
+.cd ul.drop{min-height:44px}
+.cd .rol:last-child{margin-bottom:auto}
 .pchip{display:flex;align-items:center;gap:7px;background:var(--paper);box-shadow:inset 3px 0 0 var(--c,var(--fg)),0 0 0 1px var(--line);border-radius:6px;padding:6px 8px 6px 9px;font-size:14.5px;cursor:grab;user-select:none;-webkit-user-select:none;min-width:0}
 .pchip:hover{box-shadow:inset 3px 0 0 var(--c,var(--fg)),0 0 0 1px var(--faint)}
 .pchip .pt{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -260,7 +262,10 @@ ul.drop{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;ga
 .pchip.done .pcb{background:var(--c,var(--fg));border-color:var(--c,var(--fg))}
 .pchip.done .pcb svg path{stroke-dashoffset:0}
 .pchip.sortable-ghost{opacity:.35}
-.oth{display:flex;flex-direction:column;gap:2px;padding:0 3px}
+.rol{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:5px}
+.pchip.ro{cursor:default}
+.cal.has-sel .pchip.ro{opacity:.55}
+.cal.has-sel .pchip.ro:hover{opacity:1}
 .other{font-size:12.5px;color:var(--muted);display:flex;gap:5px;align-items:center;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .other i{width:6px;height:6px;border-radius:50%;background:var(--c);flex:none}
 .other.done{color:var(--faint);text-decoration:line-through}
@@ -925,11 +930,15 @@ function renderPlanner(){
     tops.forEach(o => { if (inRange(o.x.date)) (byDay[o.x.date] = byDay[o.x.date] || []).push(planChip(o, q, start, multi)); });
     if (inRange(q.date)) (marks[q.date] = marks[q.date] || []).push(q);
   }
+  // sheets not being planned: shown with the same look, read-only, so the load of each day is clear
   for (const q of S.papers) {
     if (selIds.has(q.id)) continue;
-    const c = subj(q.subject)?.color;
-    if (inRange(q.date)) (others[q.date] = others[q.date] || []).push({ t:pName(q), c, dl:true });
-    q.items.forEach(x => { if (inRange(x.date)) (others[x.date] = others[x.date] || []).push({ t:x.t, c, done:x.done }); });
+    if (inRange(q.date)) (marks[q.date] = marks[q.date] || []).push(q);
+    q.items.forEach((x, i) => {
+      if (!inRange(x.date)) return;
+      const e = blockEnd(q.items, i), kids = q.items.slice(i + 1, e);
+      (others[x.date] = others[x.date] || []).push(planChip({ x, t:kids.length, d:kids.filter(k => k.done).length }, q, start, true).replace('class="pchip', 'class="pchip ro'));
+    });
   }
   const dow = d => (parse(d).getDay() + 6) % 7, gStart = addTo(start, -dow(start)), gEnd = addTo(end, 6 - dow(end));
   const cells = [];
@@ -941,7 +950,7 @@ function renderPlanner(){
       <div class="cd-h"><span class="wdn">${dt.toLocaleDateString('es', { weekday:'short' }).replace('.','')}</span><b>${dt.getDate()}</b>${first ? ' ' + dt.toLocaleDateString('es', { month:'short' }).replace('.','') : ''}${d===start ? '<span class="tag">Hoy</span>' : ''}</div>
       ${mk.map(q => `<div class="mark" style="--c:${subj(q.subject)?.color || 'var(--warn)'}">${esc(pName(q))}</div>`).join('')}
       <ul class="drop" data-date="${d}">${(byDay[d] || []).join('')}</ul>
-      ${(others[d] || []).length ? `<div class="oth">${others[d].map(o => `<span class="other ${o.done?'done':''} ${o.dl?'dl':''}" style="--c:${o.c || 'var(--faint)'}"><i></i>${esc(o.t)}</span>`).join('')}</div>` : ''}
+      ${(others[d] || []).length ? `<ul class="rol">${others[d].join('')}</ul>` : ''}
     </div>`);
   }
   const pending = groups.reduce((n, g) => n + g.tray.filter(o => !o.x.done).length, 0);
@@ -965,7 +974,7 @@ function renderPlanner(){
         </div>`; }).join('')}
         ${sel.length ? '<p class="tray-hint">Arrastra cada tarea al día en que quieras hacerla.</p>' : '<p class="tray-hint">Elige arriba los papeles que quieres repartir.</p>'}
       </aside>
-      <div class="cal">
+      <div class="cal ${sel.length ? 'has-sel' : ''}">
         ${['lun','mar','mié','jue','vie','sáb','dom'].map(w => `<div class="wd">${w}</div>`).join('')}
         ${cells.join('')}
       </div>
@@ -973,7 +982,7 @@ function renderPlanner(){
   </div>`;
   if (!window.Sortable) return;
   el.querySelectorAll('ul.drop').forEach(ul => Sortable.create(ul, {
-    group:'plan', draggable:'.pchip', animation:150, delay:150, delayOnTouchOnly:true, filter:'.pcb', preventOnFilter:false,
+    group:'plan', draggable:'.pchip:not(.ro)', animation:150, delay:150, delayOnTouchOnly:true, filter:'.pcb', preventOnFilter:false,
     onEnd(ev){
       if (ev.from === ev.to && ev.to.dataset.date !== undefined && ev.from.dataset.date === ev.to.dataset.date) return;
       const f = findItem(ev.item.dataset.id); if (!f.it) return;
