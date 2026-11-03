@@ -68,7 +68,12 @@ body.dragging{user-select:none;-webkit-user-select:none;cursor:grabbing}
 .ghost{position:fixed;left:0;top:0;z-index:80;pointer-events:none;box-shadow:var(--shadow);background:var(--paper);color:var(--fg)}
 
 /* Sheets */
-.board{display:flex;gap:22px;align-items:flex-start}
+.board{display:flex;gap:22px;align-items:stretch}
+.dnd-ghost{opacity:.35}
+.paper.dnd-ghost{opacity:.25;box-shadow:none;outline:1.5px dashed var(--faint);outline-offset:-1px}
+.dnd-drag{opacity:.96!important;box-shadow:var(--shadow)!important;transform:rotate(.6deg)}
+li.dnd-drag{background:var(--paper);border-radius:6px}
+body.sorting,body.sorting *{cursor:grabbing!important;user-select:none!important;-webkit-user-select:none!important}
 .col{flex:1 1 0;min-width:0;display:flex;flex-direction:column;gap:22px;min-height:160px;padding-bottom:40px}
 .board>.empty{flex:0 1 300px}
 .paper{position:relative;background:var(--paper);border-radius:4px 4px 6px 6px;box-shadow:var(--sheet);padding:14px 16px 6px 32px;min-width:0;transition:box-shadow .15s,transform .15s}
@@ -563,7 +568,7 @@ function remoteFromSnap(r){
   return { subjects:undefined, p:{}, legacy:false, empty:true };
 }
 function applyRemote(remote){
-  if (drag) { pendingRemote = remote; return; }
+  if (drag || sorting) { pendingRemote = remote; return; }
   pendingRemote = null;
   const local = localMap();
   if (!firstDone) {
@@ -872,31 +877,53 @@ function applyFocus(){
 let lastCols = 0;
 function nCols(){ const w = board.clientWidth || innerWidth; return Math.max(1, Math.floor((w + 22) / (300 + 22))); }
 window.addEventListener('resize', () => { if (nCols() !== lastCols && !document.activeElement?.isContentEditable) render(); });
+/* drag & drop: Sortable's own pointer dragging (same on mouse and touch, smoother than the browser's native drag);
+   nothing re-renders while something is being dragged, and a drop that no longer matches the data is undone instead of losing anything */
+let sorting = false, lastSortEnd = 0;
+function dragOpts(extra){
+  const end = extra.onEnd;
+  return {
+    animation:170, forceFallback:true, fallbackTolerance:4, fallbackOnBody:true, scroll:true, bubbleScroll:true, scrollSensitivity:80,
+    emptyInsertThreshold:24, ghostClass:'dnd-ghost', chosenClass:'dnd-chosen', dragClass:'dnd-drag',
+    ...extra,
+    onStart(){ sorting = true; document.body.classList.add('sorting'); },
+    onEnd(ev){
+      sorting = false; lastSortEnd = Date.now(); document.body.classList.remove('sorting');
+      try { end && end(ev); } catch(e) { render(); }
+      if (pendingRemote) applyRemote(pendingRemote);
+    }
+  };
+}
 function bindAll(){
   if (!window.Sortable) return;
-  board.querySelectorAll('.col').forEach(col => Sortable.create(col, { group:'papers', handle:'.p-grip', draggable:'.paper', animation:180, onEnd(){
-    const multi = board.querySelectorAll('.col').length > 1, ids = [];
-    board.querySelectorAll('.col').forEach(c => c.querySelectorAll(':scope > .paper').forEach(el => { ids.push(el.dataset.id); if (multi) P(el.dataset.id).col = +c.dataset.col; }));
-    const set = new Set(ids), slots = []; S.papers.forEach((p, i) => set.has(p.id) && slots.push(i));
+  board.querySelectorAll('.col').forEach(col => Sortable.create(col, dragOpts({ group:'papers', handle:'.p-grip', draggable:'.paper', onEnd(){
+    const multi = board.querySelectorAll('.col').length > 1, els = [...board.querySelectorAll('.col > .paper')];
+    if (els.some(el => !P(el.dataset.id)) || els.length !== visible().length) { render(); return; }
+    els.forEach(el => { if (multi) P(el.dataset.id).col = +el.parentElement.dataset.col; });
+    const ids = els.map(el => el.dataset.id), set = new Set(ids), slots = [];
+    S.papers.forEach((p, i) => set.has(p.id) && slots.push(i));
     const moved = ids.map(P); slots.forEach((slot, k) => S.papers[slot] = moved[k]); save();
-  }}));
+  }})));
   board.querySelectorAll('.items').forEach(bindItems);
 }
 function bindItems(ul){
   if (!window.Sortable || !ul) return;
-  Sortable.create(ul, { group:'items', handle:'.bullet', animation:150, delay:140, delayOnTouchOnly:true, onEnd(ev){
+  Sortable.create(ul, dragOpts({ group:'items', handle:'.bullet', delay:140, delayOnTouchOnly:true, onEnd(ev){
     if (ev.from === ev.to && ev.oldIndex === ev.newIndex) return;
     const fromP = P(ev.from.dataset.p), toP = P(ev.to.dataset.p), id = ev.item.dataset.id;
-    const i = fromP.items.findIndex(x => x.id === id);
-    const block = fromP.items.splice(i, blockEnd(fromP.items, i) - i), ids = new Set(block.map(b => b.id));
+    const i = fromP ? fromP.items.findIndex(x => x.id === id) : -1;
+    if (!fromP || !toP || i < 0) { render(); return; }
+    const ids = new Set(fromP.items.slice(i, blockEnd(fromP.items, i)).map(b => b.id));
     let prev = ev.item.previousElementSibling; while (prev && ids.has(prev.dataset.id)) prev = prev.previousElementSibling;
+    if (prev && !toP.items.some(x => x.id === prev.dataset.id)) { render(); return; }   // stale screen: put everything back
+    const block = fromP.items.splice(i, blockEnd(fromP.items, i) - i);
     let at = 0;
     if (prev) { const pi = toP.items.findIndex(x => x.id === prev.dataset.id); at = toP.items[pi].fold ? blockEnd(toP.items, pi) : pi + 1; }
     const prevLvl = at > 0 ? toP.items[at-1].lvl : -1, shift = Math.min(block[0].lvl, prevLvl + 1) - block[0].lvl;
     block.forEach(b => b.lvl = Math.max(0, Math.min(MAXLVL, b.lvl + shift)));
     toP.items.splice(at, 0, ...block);
     updatePaper(fromP.id); if (toP !== fromP) updatePaper(toP.id);
-  }});
+  }}));
 }
 
 /* ---------- items ---------- */
@@ -1121,15 +1148,15 @@ function renderPlanner(){
     </div>
   </div>`;
   if (!window.Sortable) return;
-  el.querySelectorAll('ul.drop').forEach(ul => Sortable.create(ul, {
-    group:'plan', draggable:'.pchip:not(.ro)', animation:150, delay:150, delayOnTouchOnly:true, filter:'.pcb', preventOnFilter:false,
+  el.querySelectorAll('ul.drop').forEach(ul => Sortable.create(ul, dragOpts({
+    group:'plan', draggable:'.pchip:not(.ro)', delay:150, delayOnTouchOnly:true, filter:'.pcb', preventOnFilter:false,
     onEnd(ev){
-      if (ev.from === ev.to && ev.to.dataset.date !== undefined && ev.from.dataset.date === ev.to.dataset.date) return;
-      const f = findItem(ev.item.dataset.id); if (!f.it) return;
+      if (ev.from === ev.to && ev.from.dataset.date === ev.to.dataset.date) return;
+      const f = findItem(ev.item.dataset.id); if (!f.it) { render(); return; }
       f.it.date = ev.to.dataset.date || '';
       render();
     }
-  }));
+  })));
 }
 function planAuto(){
   const { start, end } = planRange(), sel = planSel(), load = {};
@@ -1255,7 +1282,7 @@ const A = {
 };
 document.addEventListener('click', e => {
   if (suppressClick) { suppressClick = false; return; }
-  const bl = e.target.closest('.bullet');
+  const bl = Date.now() - lastSortEnd < 400 ? null : e.target.closest('.bullet');
   if (bl) {
     const { p, i, it } = findItem(bl.dataset.id);
     if (it && blockEnd(p.items, i) > i + 1) { it.fold = !it.fold; updatePaper(p.id); } else setLevel(bl.dataset.id, 1, true);
@@ -1527,7 +1554,7 @@ document.addEventListener('paste', e => {
 window.__sem = { get S(){ return S; }, code:() => syncCode, render:() => render() }; // handle for automated tests
 render();
 startSync();
-setInterval(() => { if ((!canSync || firstDone) && checkResets()) render(); }, 60000);
+setInterval(() => { if (!sorting && (!canSync || firstDone) && checkResets()) render(); }, 60000);
 document.addEventListener('visibilitychange', () => { if (!document.hidden && (!canSync || firstDone) && checkResets()) render(); });
 })();
 </script>
