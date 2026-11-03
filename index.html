@@ -162,6 +162,8 @@ body.dragging{user-select:none;-webkit-user-select:none;cursor:grabbing}
 .cloud[data-state="offline"] svg .x,.cloud[data-state="error"] svg .x{display:block}
 #syncbar{position:fixed;z-index:65;left:50%;transform:translateX(-50%);top:calc(12px + env(safe-area-inset-top,0px));display:flex;gap:14px;align-items:center;max-width:calc(100vw - 32px);background:var(--paper);color:var(--warn);box-shadow:0 0 0 1.5px var(--warn),var(--shadow);border-radius:12px;padding:10px 16px;font-size:14.5px}
 #syncbar button{all:unset;cursor:pointer;font-weight:600;white-space:nowrap}
+#syncbar.info{color:var(--fg);box-shadow:0 0 0 1.5px var(--fg),var(--shadow)}
+#syncbar button.soft{font-weight:400;color:var(--muted)}
 .code{font:14px ui-monospace,Menlo,monospace;color:var(--muted);word-break:break-all}
 .link-in{all:unset;box-sizing:border-box;flex:1;min-width:0;padding:9px 12px;border-radius:9px;box-shadow:inset 0 0 0 1px var(--line);font-size:15px}
 .when.rep{color:var(--muted)}
@@ -338,7 +340,7 @@ const I = {
 const It = (t, lvl=0, done=false) => ({ id:uid(), t, lvl, done });
 function seed(){
   const sc = { id:uid(), name:'Cálculo', color:COLORS[0] }, sm = { id:uid(), name:'Micro', color:COLORS[2] }, sa = { id:uid(), name:'Arte', color:COLORS[1] };
-  return { v:2, sound:true, filter:'all', subjects:[sc, sm, sa], papers:[
+  return { v:2, sound:true, filter:'all', seeded:true, subjects:[sc, sm, sa], papers:[
     { id:uid(), title:'Parcial de integrales', subject:sc.id, date:iso(addDays(9)), progress:true, items:[
       It('Integración por partes',0,true), It('Teoría',1,true), It('Ejercicios',1,true),
       It('Cambio de variable'), It('Hoja 4',1), It('Examen del año pasado') ]},
@@ -375,7 +377,7 @@ function doSave(){
     const a = document.activeElement, typing = a?.isContentEditable ? a.dataset.id : null;
     if (!(typing && typing === histEl && Date.now() - histT < 4000)) { undoStack.push(lastData); if (undoStack.length > 200) undoStack.shift(); }
     histEl = typing; histT = Date.now(); redoStack = [];
-    lastData = d; S.updatedAt = Date.now(); schedulePush();
+    lastData = d; delete S.seeded; schedulePush();
   }
   try { localStorage.setItem(KEY, JSON.stringify(S)); } catch(e){}
 }
@@ -383,7 +385,7 @@ let saveT; const save = () => { clearTimeout(saveT); saveT = setTimeout(doSave, 
 function restoreData(str){
   const d = JSON.parse(str);
   S.subjects = d.subjects || []; S.papers = d.papers || [];
-  lastData = str; histEl = null; S.updatedAt = Date.now(); schedulePush();
+  lastData = str; histEl = null; schedulePush();
   try { localStorage.setItem(KEY, JSON.stringify(S)); } catch(e){}
   render();
 }
@@ -398,53 +400,86 @@ function redo(){
   undoStack.push(lastData); restoreData(redoStack.pop());
 }
 
-/* ---------- sync (Firebase Firestore, one document per board, keyed by a long random code) ---------- */
+/* ---------- sync (Firebase Firestore) ----------
+   One document per board. Every sheet is its own field (p.<id>), so changes to different sheets never touch each other.
+   No device clocks are compared: each device keeps the last state it saw confirmed by the server ("base") and does a
+   three-way merge (base / this device / server), sheet by sheet and line by line. */
 const FB = { apiKey:"AIzaSyDI5TNe9PeTHGjraciRTb-zqsxFzwz1wlQ", authDomain:"to-do-d35e2.firebaseapp.com", projectId:"to-do-d35e2", storageBucket:"to-do-d35e2.firebasestorage.app", messagingSenderId:"21733568444", appId:"1:21733568444:web:4c03a8c1cdec49c6f945b9" };
-const FBV = '10.12.2', SYNC_KEY = 'semestre.sync', DEV_KEY = 'semestre.dev';
+const FBV = '10.12.2', SYNC_KEY = 'semestre.sync', DEV_KEY = 'semestre.dev', BASE_KEY = 'semestre.base.', BACKUP_KEY = 'semestre.backup';
 const lsGet = k => { try { return localStorage.getItem(k); } catch(e){ return null; } };
 const lsSet = (k,v) => { try { localStorage.setItem(k, v); } catch(e){} };
 const genCode = (n=24) => { const a = new Uint8Array(n); crypto.getRandomValues(a); return Array.from(a, b => 'abcdefghijkmnpqrstuvwxyz23456789'[b % 32]).join(''); };
-const DEV = lsGet(DEV_KEY) || (() => { const d = genCode(10); lsSet(DEV_KEY, d); return d; })();
 const canSync = window.self === window.top && /^https?:$/.test(location.protocol);
 const validCode = c => typeof c === 'string' && /^[a-z0-9]{20,64}$/.test(c);
-let db = null, docRef = null, unsub = null, syncCode = null, pushT = null, retryT = null, pendingRemote = null, syncState = 'off', syncErr = '', lastOk = 0, adopting = false, dirty = false;
+let db = null, docRef = null, unsub = null, syncCode = null, pushT = null, retryT = null, stuckT = null, pendingRemote = null;
+let syncState = 'off', syncErr = '', inflight = 0, fromCache = true, firstDone = false, linking = false;
+let srv = null;          // last server state seen (what the server has, including our own writes in flight)
+let mergeOffer = null;   // sheets this device had that the server did not, offered to the user after linking/upgrading
 const loadScript = src => new Promise((ok, ko) => { const el = document.createElement('script'); el.src = src; el.onload = ok; el.onerror = ko; document.head.appendChild(el); });
-let stuckT = null;
-function setSync(st, err){
-  clearTimeout(stuckT);
-  if (st === 'wait' || st === 'saving') stuckT = setTimeout(() => setSync('error', 'el servidor no responde'), 12000);
-  if (st === 'ok') { lastOk = Date.now(); syncErr = ''; }
-  if (st === 'error') syncErr = err || syncErr;
-  if (!navigator.onLine && st !== 'off') st = 'offline';
-  syncState = st;
-  const c = $('#cloud'); if (c) { c.hidden = st === 'off'; c.dataset.state = st; c.setAttribute('aria-label', syncText()); c.title = syncText(); }
-  const bar = $('#syncbar');
-  if (bar) {
-    const show = st === 'error' || st === 'offline';
-    bar.hidden = !show;
-    if (show) bar.innerHTML = st === 'offline'
-      ? '<span>Sin conexión. Los cambios se guardan y se subirán al volver.</span>'
-      : `<span>No se está sincronizando${syncErr ? ` (${esc(syncErr)})` : ''}.</span><button data-act="retrySync">Reintentar</button>`;
+
+/* -- state as comparable strings -- */
+function localMap(){ const p = {}; S.papers.forEach((x, i) => p[x.id] = JSON.stringify({ ...x, ord:i })); return { subjects:JSON.stringify(S.subjects), p }; }
+function mapFromData(d){ const p = {}; (d.papers || []).forEach((x, i) => p[x.id] = JSON.stringify({ ...x, ord:i })); return { subjects:JSON.stringify(d.subjects || []), p }; }
+const readBase = () => { try { const b = JSON.parse(lsGet(BASE_KEY + syncCode)); return b && b.p ? b : null; } catch(e){ return null; } };
+const writeBase = m => lsSet(BASE_KEY + syncCode, JSON.stringify({ subjects:m.subjects, p:m.p }));
+
+/* -- three-way merge helpers (b = base, l = this device, r = server); strings compared, undefined = absent -- */
+function pick3(b, l, r){ if (l === r) return l; if (r === b) return l; if (l === b) return r; return null; }
+function mergeList(b, l, r){
+  const js = x => x === undefined ? undefined : JSON.stringify(x);
+  const bm = new Map((b || []).map(x => [x.id, js(x)])), lm = new Map(l.map(x => [x.id, x])), rm = new Map(r.map(x => [x.id, x]));
+  const take = id => {
+    const lx = lm.get(id), rx = rm.get(id), bx = b ? bm.get(id) : undefined;
+    if (!b) return lx && rx ? rx : (lx || rx);               // no common base: keep everything, server wins on the same line
+    const v = pick3(bx, js(lx), js(rx));
+    if (v === null) return lx || rx;                          // both changed the same line: this device's edit wins
+    return v === undefined ? null : JSON.parse(v);
+  };
+  const ids = a => a.map(x => x.id).join(',');
+  const primary = b && ids(r) === ids(b) ? l : r, other = primary === l ? r : l;
+  const out = [];
+  for (const x of primary) { const v = take(x.id); if (v) out.push(v); }
+  let prev = null;
+  for (const x of other) {
+    if (!out.some(y => y.id === x.id) && !primary.some(y => y.id === x.id)) {
+      const v = take(x.id);
+      if (v) out.splice(prev ? out.findIndex(y => y.id === prev) + 1 : 0, 0, v);
+    }
+    if (out.some(y => y.id === x.id)) prev = x.id;
   }
-  const m = $('#syncMsg'); if (m) m.textContent = syncText();
+  return out;
 }
-function syncText(){
-  return { ok:'Sincronizado', saving:'Guardando…', wait:'Conectando…', offline:'Sin conexión', error:'Error de sincronización', off:'' }[syncState] || '';
+function mergePaper(bj, lj, rj){
+  const b = bj ? JSON.parse(bj) : null, l = JSON.parse(lj), r = JSON.parse(rj), out = {};
+  for (const k of new Set([...Object.keys(l), ...Object.keys(r)])) {
+    if (k === 'items') continue;
+    const v = b ? pick3(JSON.stringify(b[k]), JSON.stringify(l[k]), JSON.stringify(r[k])) : JSON.stringify(r[k] !== undefined ? r[k] : l[k]);
+    const val = v === null ? l[k] : (v === undefined ? undefined : JSON.parse(v));
+    if (val !== undefined) out[k] = val;
+  }
+  out.items = mergeList(b ? b.items || [] : null, l.items || [], r.items || []);
+  return JSON.stringify(out);
 }
-const errMsg = e => (e && (e.code === 'permission-denied' ? 'permiso denegado por Firebase' : e.code === 'unavailable' ? 'servidor no disponible' : (e.code || e.message))) || 'error desconocido';
-function schedulePush(){ if (!docRef) return; dirty = true; setSync('saving'); clearTimeout(pushT); pushT = setTimeout(push, 400); }
-function push(){
-  if (!docRef) return;
-  const at = S.updatedAt || Date.now();
-  docRef.set({ data:lastData, updatedAt:at, device:DEV }).then(() => {
-    if ((S.updatedAt || 0) <= at) { dirty = false; setSync('ok'); }
-  }, e => { setSync('error', errMsg(e)); clearTimeout(retryT); retryT = setTimeout(push, 6000); });
+function mergeMaps(base, local, remote){
+  const subjects = (() => {
+    const v = pick3(base?.subjects, local.subjects, remote.subjects);
+    if (v !== null) return v;
+    return JSON.stringify(mergeList(base?.subjects ? JSON.parse(base.subjects) : null, JSON.parse(local.subjects || '[]'), JSON.parse(remote.subjects || '[]')));
+  })();
+  const p = {};
+  for (const id of new Set([...Object.keys(local.p), ...Object.keys(remote.p), ...Object.keys(base?.p || {})])) {
+    const b = base ? base.p[id] : undefined, l = local.p[id], r = remote.p[id];
+    let v = base ? pick3(b, l, r) : (l && r ? mergePaper(null, l, r) : (l || r));
+    if (v === null) v = l && r ? mergePaper(b, l, r) : (l || r);   // edited here, deleted there (or the reverse): keep the edit
+    if (v !== undefined) p[id] = v;
+  }
+  return { subjects, p };
 }
-function applyRemote(r){
-  if (drag) { pendingRemote = r; return; }
-  pendingRemote = null;
-  let d; try { d = JSON.parse(r.data); } catch(e){ return; }
-  // keep whatever is being typed right now, and the caret position
+
+/* -- apply a merged state to the screen without losing what is being typed -- */
+function applyMap(m){
+  const papers = Object.values(m.p).map(j => JSON.parse(j)).sort((a, b) => (a.ord ?? 0) - (b.ord ?? 0));
+  papers.forEach(p => delete p.ord);
   const a = document.activeElement, ed = a?.isContentEditable && a.dataset.edit ? a : null;
   let keep = null;
   if (ed) {
@@ -452,15 +487,12 @@ function applyRemote(r){
     if (sel.rangeCount && ed.contains(sel.anchorNode)) { const rg = sel.getRangeAt(0).cloneRange(); rg.selectNodeContents(ed); rg.setEnd(sel.anchorNode, sel.anchorOffset); off = rg.toString().length; }
     keep = { kind:ed.dataset.edit, id:ed.dataset.id, text:ed.textContent, off };
   }
-  S.subjects = d.subjects || []; S.papers = d.papers || []; S.updatedAt = r.updatedAt;
-  let localWins = false;
+  S.subjects = m.subjects ? JSON.parse(m.subjects) : []; S.papers = papers;
   if (keep) {
-    if (keep.kind === 'title') { const p = P(keep.id); if (p && p.title !== keep.text) { p.title = keep.text; localWins = true; } }
-    else { const f = findItem(keep.id); if (f.it && f.it.t !== keep.text) { f.it.t = keep.text; localWins = true; } }
+    if (keep.kind === 'title') { const p = P(keep.id); if (p) p.title = keep.text; }
+    else { const f = findItem(keep.id); if (f.it) f.it.t = keep.text; }
   }
-  if (checkResets()) localWins = true;
-  lastData = localWins ? '' : dataStr();
-  undoStack = []; redoStack = [];
+  lastData = dataStr(); undoStack = []; redoStack = [];
   try { localStorage.setItem(KEY, JSON.stringify(S)); } catch(e){}
   render();
   if (keep) {
@@ -473,38 +505,145 @@ function applyRemote(r){
     }
   }
 }
+const sameMap = (a, b) => a.subjects === b.subjects && Object.keys(a.p).length === Object.keys(b.p).length && Object.keys(a.p).every(k => a.p[k] === b.p[k]);
+
+/* -- status -- */
+function setSync(st, err){
+  clearTimeout(stuckT);
+  if (st === 'error') syncErr = err || syncErr; else syncErr = '';
+  if (!navigator.onLine && st !== 'off' && st !== 'error') st = 'offline';
+  if (st === 'wait' || st === 'saving') stuckT = setTimeout(() => setSync('error', 'el servidor no responde'), 15000);
+  syncState = st;
+  const c = $('#cloud'); if (c) { c.hidden = st === 'off'; c.dataset.state = st; c.setAttribute('aria-label', syncText()); c.title = syncText(); }
+  const bar = $('#syncbar');
+  if (bar) {
+    if (mergeOffer) {
+      bar.hidden = false; bar.classList.add('info');
+      bar.innerHTML = `<span>Este dispositivo tenía ${mergeOffer.n === 1 ? 'un papel distinto' : mergeOffer.n + ' papeles distintos'} de la nube.</span><button data-act="mergeYes">Unirlos</button><button data-act="mergeNo" class="soft">Descartar</button>`;
+    } else {
+      const show = st === 'error' || st === 'offline';
+      bar.hidden = !show; bar.classList.remove('info');
+      if (show) bar.innerHTML = st === 'offline'
+        ? '<span>Sin conexión. Los cambios se guardan aquí y se subirán al volver.</span>'
+        : `<span>No se está sincronizando${syncErr ? ` (${esc(syncErr)})` : ''}.</span><button data-act="retrySync">Reintentar</button>`;
+    }
+  }
+  const m = $('#syncMsg'); if (m) m.textContent = syncText();
+}
+function syncText(){ return { ok:'Sincronizado', saving:'Guardando…', wait:'Conectando…', offline:'Sin conexión', error:'Error de sincronización', off:'' }[syncState] || ''; }
+function refreshStatus(){ if (!db) return; setSync(inflight > 0 ? 'saving' : fromCache || !firstDone ? 'wait' : 'ok'); }
+const errMsg = e => (e && (e.code === 'permission-denied' ? 'permiso denegado por Firebase' : e.code === 'unavailable' ? 'servidor no disponible' : (e.code || e.message))) || 'error desconocido';
+
+/* -- writing: only the sheets that differ from what the server has -- */
+function schedulePush(){ if (!docRef || !firstDone) return; clearTimeout(pushT); pushT = setTimeout(push, 300); }
+function push(){
+  if (!docRef || !firstDone || !srv) return;
+  const cur = localMap(), del = firebase.firestore.FieldValue.delete(), upd = {}, pm = {};
+  let n = 0;
+  if (cur.subjects !== srv.subjects) { upd.subjects = cur.subjects; n++; }
+  for (const id in cur.p) if (cur.p[id] !== srv.p[id]) { pm[id] = cur.p[id]; n++; }
+  for (const id in srv.p) if (!(id in cur.p)) { pm[id] = del; n++; }
+  if (srv.legacy) { upd.data = del; upd.updatedAt = del; upd.device = del; n++; }
+  if (!n) return;
+  if (Object.keys(pm).length) upd.p = pm;
+  upd.v = 3;
+  const before = srv;
+  srv = { subjects:cur.subjects, p:{ ...cur.p } };
+  inflight++; refreshStatus();
+  docRef.set(upd, { merge:true }).then(() => { inflight--; refreshStatus(); }, e => {
+    inflight--; srv = before; setSync('error', errMsg(e));
+    clearTimeout(retryT); retryT = setTimeout(push, 8000);
+  });
+}
+
+/* -- reading -- */
+function remoteFromSnap(r){
+  if (r && r.p) return { subjects:r.subjects ?? JSON.stringify([]), p:{ ...r.p }, legacy:r.data !== undefined };
+  if (r && r.data) { try { return { ...mapFromData(JSON.parse(r.data)), legacy:true }; } catch(e){} }
+  return { subjects:undefined, p:{}, legacy:false, empty:true };
+}
+function applyRemote(remote){
+  if (drag) { pendingRemote = remote; return; }
+  pendingRemote = null;
+  const local = localMap();
+  if (!firstDone) {
+    firstDone = true;
+    let base = readBase();
+    if (!base && !remote.empty) {
+      // no shared history with this board (first time after the update, or just linked): the server wins,
+      // and whatever only this device had is kept aside and offered for merging
+      if (!S.seeded) {
+        lsSet(BACKUP_KEY, JSON.stringify({ at:Date.now(), subjects:S.subjects, papers:S.papers }));
+        const norm = j => j && j.replace(/,"ord":\d+\}$/, '}');
+        const diff = Object.keys(local.p).filter(id => norm(local.p[id]) !== norm(remote.p[id]));
+        if (diff.length) mergeOffer = { n:diff.length, local };
+      }
+      delete S.seeded;
+      base = local;
+    }
+    const merged = mergeMaps(base, local, remote);
+    srv = remote.legacy ? { subjects:undefined, p:{}, legacy:true } : { subjects:remote.subjects, p:remote.p };
+    if (!sameMap(merged, local)) applyMap(merged);
+    if (checkResets()) render();
+    lastData = dataStr();
+    push();
+    if (!remote.legacy && !remote.empty && !fromCache) writeBase(remote);
+    refreshStatus();
+    return;
+  }
+  // a device still running the old version rewrote the whole board: never let it delete or undo anything,
+  // just add what it has (this device wins where both differ)
+  const merged = remote.legacy ? mergeMaps(null, remote, local) : mergeMaps(srv ? { subjects:srv.subjects, p:srv.p } : null, local, remote);
+  srv = remote.legacy ? { subjects:undefined, p:{}, legacy:true } : { subjects:remote.subjects, p:remote.p };
+  if (!sameMap(merged, local)) applyMap(merged);
+  push();
+}
 function listen(){
   unsub && unsub(); clearTimeout(retryT);
   docRef = db.collection('boards').doc(syncCode);
+  firstDone = false; srv = null; fromCache = true;
   setSync('wait');
-  unsub = docRef.onSnapshot(snap => {
-    if (snap.metadata.hasPendingWrites) return;
-    if (snap.metadata.fromCache) { if (!navigator.onLine) setSync('offline'); return; }
-    const adopt = adopting; adopting = false;
-    if (!snap.exists) { push(); return; }
-    const r = snap.data(), ru = r.updatedAt || 0, lu = S.updatedAt || 0;
-    if (adopt || ru > lu) { if (r.data !== lastData) applyRemote(r); else S.updatedAt = ru; if (!dirty) setSync('ok'); }
-    else if (ru < lu) push();
-    else if (!dirty) setSync('ok');
-  }, e => { setSync('error', errMsg(e)); retryT = setTimeout(listen, 6000); });
+  unsub = docRef.onSnapshot({ includeMetadataChanges:true }, snap => {
+    const md = snap.metadata;
+    fromCache = md.fromCache;
+    if (md.fromCache && !firstDone) { refreshStatus(); return; }      // wait for the real server state on start
+    const remote = remoteFromSnap(snap.exists ? snap.data() : null);
+    const confirmed = !md.hasPendingWrites && !md.fromCache && !remote.legacy && !remote.empty;
+    if (md.hasPendingWrites && firstDone) { refreshStatus(); return; } // our own write echoing back
+    applyRemote(remote);
+    if (confirmed) writeBase(remote);                                    // only after merging with the previous base
+    refreshStatus();
+  }, e => { setSync('error', errMsg(e)); retryT = setTimeout(listen, 8000); });
 }
-function useCode(code, adopt){
-  syncCode = code; adopting = !!adopt; lsSet(SYNC_KEY, code);
+function useCode(code){
+  if (code === syncCode) return;
+  syncCode = code; lsSet(SYNC_KEY, code); linking = true;
   if (db) listen();
 }
 function startSync(){
-  if (!canSync) return;
+  if (!canSync) { checkResets(); return; }
   const m = location.hash.match(/k=([a-z0-9]{20,64})/i);
-  if (m) { syncCode = m[1].toLowerCase(); adopting = true; lsSet(SYNC_KEY, syncCode); history.replaceState(null, '', location.pathname + location.search); }
+  if (m) { syncCode = m[1].toLowerCase(); lsSet(SYNC_KEY, syncCode); history.replaceState(null, '', location.pathname + location.search); }
   else { syncCode = lsGet(SYNC_KEY); if (!validCode(syncCode)) { syncCode = genCode(); lsSet(SYNC_KEY, syncCode); } }
   setSync('wait');
   const base = `https://cdn.jsdelivr.net/npm/firebase@${FBV}/`;
   loadScript(base + 'firebase-app-compat.js').then(() => loadScript(base + 'firebase-firestore-compat.js')).then(() => {
     firebase.initializeApp(FB); db = firebase.firestore(); listen();
   }).catch(() => setSync('error', 'no se pudo cargar Firebase'));
-  window.addEventListener('online', () => { setSync(dirty ? 'saving' : 'wait'); if (db) { listen(); if (dirty) push(); } });
+  window.addEventListener('online', () => { refreshStatus(); if (db) db.enableNetwork().then(() => push()); });
   window.addEventListener('offline', () => setSync('offline'));
+  document.addEventListener('visibilitychange', () => { if (!document.hidden && db) { db.enableNetwork(); push(); } });
 }
+function retrySync(){
+  if (!db) { startSync(); return; }
+  db.disableNetwork().then(() => db.enableNetwork()).then(() => { listen(); });
+}
+function mergeLocal(){
+  if (!mergeOffer) return;
+  const merged = mergeMaps(null, mergeOffer.local, localMap());   // union: nothing from either side is lost
+  mergeOffer = null; applyMap(merged); lastData = ''; save(); refreshStatus();
+}
+const boardTag = () => syncCode ? syncCode.slice(0, 4).toUpperCase() : '';
 function linkUrl(){ return `${location.origin}${location.pathname}#k=${syncCode}`; }
 
 const P = id => S.papers.find(p => p.id === id);
@@ -547,7 +686,7 @@ function render(){
   if (!ps.length) board.innerHTML = `<button class="empty" data-act="newPaper" aria-label="Nuevo papel">+</button>`;
   else {
     const n = nCols(), cols = Array.from({ length:n }, () => []);
-    ps.forEach((p, k) => { if (p.col == null) p.col = k % 3; cols[n === 1 ? 0 : p.col % n].push(p); });
+    ps.forEach((p, k) => { cols[n === 1 ? 0 : (p.col ?? k % 3) % n].push(p); });
     board.innerHTML = cols.map((c, k) => `<div class="col" data-col="${k}">${c.map(paperHtml).join('')}</div>`).join('');
   }
   lastCols = nCols();
@@ -865,12 +1004,13 @@ function openSheet(){
     <button class="switch ${S.sound?'on':''}" data-act="toggleSound"><b></b>Sonido</button>
     ${canSync && syncCode ? `<div class="sync">
       <div id="qr" class="qr"></div>
-      <div class="sync-txt"><strong>Abre esto en el móvil</strong><span>Escanéalo con la cámara y tendrás la misma mesa, sincronizada.</span><span id="syncMsg" class="sync-st">${syncText()}</span><span class="code">${syncCode}</span>
+      <div class="sync-txt"><strong>Abre esto en el móvil</strong><span>Escanéalo con la cámara y tendrás la misma mesa, sincronizada.</span><span id="syncMsg" class="sync-st">${syncText()}</span><span class="code">Mesa ${boardTag()}: si otro dispositivo muestra otra mesa, no están unidos.</span>
       <div class="row"><button class="btn ghostb" data-act="copyLink">Copiar enlace</button></div></div>
     </div>
     <div class="row"><input class="link-in" id="linkIn" placeholder="Pega aquí un enlace o código para vincular" autocomplete="off"><button class="btn ghostb" data-act="linkDevice">Vincular</button></div>` : `<p class="note">La sincronización entre dispositivos funciona en la versión publicada en GitHub Pages.</p>`}
     <textarea id="bk" aria-label="Copia de seguridad">${esc(JSON.stringify({ v:2, subjects:S.subjects, papers:S.papers }))}</textarea>
     <div class="row"><button class="btn ghostb" data-act="copyBk" id="copyBtn">Copiar</button>${standalone ? '<button class="btn ghostb" data-act="dlBk">Descargar</button>' : ''}<button class="btn ghostb" data-act="restore" id="restoreBtn">Restaurar lo pegado</button></div>
+    ${(() => { try { const b = JSON.parse(lsGet(BACKUP_KEY)); return b ? `<div class="row"><button class="btn ghostb" data-act="restoreBackup">Recuperar lo que tenía este dispositivo (${new Date(b.at).toLocaleDateString('es', { day:'numeric', month:'short' })})</button></div>` : ''; } catch(e){ return ''; } })()}
     <div class="row"><button class="btn danger" data-act="wipe">Borrar todo</button><span class="sp"></span><button class="btn" data-act="closeSheet">Listo</button></div>
   </div>`;
   sh.hidden = false;
@@ -1084,11 +1224,16 @@ const A = {
   settings(){ openSheet(); },
   closeSheet(){ $('#sheet').hidden = true; },
   toggleSound(_, b){ S.sound = !S.sound; b.classList.toggle('on', S.sound); save(); if (S.sound) sound('check'); },
-  retrySync(){ if (!db) { startSync(); return; } listen(); if (dirty) push(); },
+  retrySync(){ retrySync(); },
+  mergeYes(){ mergeLocal(); },
+  mergeNo(){ mergeOffer = null; refreshStatus(); },
+  restoreBackup(){
+    try { const b = JSON.parse(lsGet(BACKUP_KEY)); if (!b) return; doSave(); undoStack.push(lastData); restoreData(JSON.stringify({ subjects:b.subjects, papers:b.papers })); $('#sheet').hidden = true; toast(); } catch(e){}
+  },
   linkDevice(){
     const v = ($('#linkIn')?.value || '').trim(), m = v.match(/([a-z0-9]{20,64})\s*$/i);
     if (!m) { $('#linkIn').value = ''; $('#linkIn').placeholder = 'Ese código no es válido'; return; }
-    useCode(m[1].toLowerCase(), true); $('#sheet').hidden = true;
+    useCode(m[1].toLowerCase()); $('#sheet').hidden = true;
   },
   copyLink(_, b){ try { navigator.clipboard.writeText(linkUrl()).then(() => b.textContent = 'Copiado', () => b.textContent = linkUrl()); } catch(e){ b.textContent = linkUrl(); } },
   copyBk(_, b){
@@ -1379,11 +1524,11 @@ document.addEventListener('paste', e => {
   document.execCommand('insertText', false, text.replace(/\s*\n\s*/g,' '));
 });
 
-checkResets();
+window.__sem = { get S(){ return S; }, code:() => syncCode, render:() => render() }; // handle for automated tests
 render();
 startSync();
-setInterval(() => { if (checkResets()) render(); }, 60000);
-document.addEventListener('visibilitychange', () => { if (!document.hidden && checkResets()) render(); });
+setInterval(() => { if ((!canSync || firstDone) && checkResets()) render(); }, 60000);
+document.addEventListener('visibilitychange', () => { if (!document.hidden && (!canSync || firstDone) && checkResets()) render(); });
 })();
 </script>
 
