@@ -132,7 +132,39 @@ body.sorting,body.sorting *{cursor:grabbing!important;user-select:none!important
 
 /* Sheet & toast */
 #sheet{position:fixed;inset:0;z-index:60;background:rgba(10,12,15,.35);display:grid;place-items:center;padding:16px}
-.sheet-card{background:var(--paper);border-radius:14px;box-shadow:var(--shadow);width:min(440px,100%);max-height:calc(100vh - 32px);overflow:auto;padding:22px;display:flex;flex-direction:column;gap:14px}
+.sheet-card{background:var(--paper);border-radius:14px;box-shadow:var(--shadow);width:min(520px,100%);max-height:min(680px,calc(100dvh - 32px));display:flex;flex-direction:column;overflow:hidden}
+.sheet-card:not(.keys){height:min(580px,calc(100dvh - 32px))}
+.sh-head{flex:none;display:flex;align-items:center;justify-content:space-between;gap:12px;padding:16px 18px 10px 22px}
+.sh-head h2{margin:0;font-size:19px;font-weight:600;letter-spacing:-.015em}
+.sh-done{all:unset;cursor:pointer;font-size:15px;font-weight:600;padding:8px 14px;border-radius:9px;background:var(--fg);color:var(--paper)}
+.sh-done:focus-visible{outline:2px solid var(--fg);outline-offset:2px}
+.tabs{flex:none;display:flex;gap:4px;margin:0 18px 4px;padding:3px;border-radius:10px;background:var(--hover);overflow-x:auto;scrollbar-width:none}
+.tabs::-webkit-scrollbar{display:none}
+.tabs button{all:unset;flex:1;text-align:center;white-space:nowrap;cursor:pointer;font-size:14.5px;color:var(--muted);padding:7px 10px;border-radius:8px}
+.tabs button.on{background:var(--paper);color:var(--fg);box-shadow:0 1px 2px rgba(0,0,0,.08)}
+.tabs button:focus-visible{outline:2px solid var(--fg)}
+.sh-body{flex:1 1 auto;min-height:0;overflow-y:auto;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;padding:12px 22px 22px;display:flex;flex-direction:column;gap:18px}
+.sec{display:flex;flex-direction:column;gap:10px}
+.sec h3{margin:0;font-size:13px;font-weight:500;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
+.sec+.sec{border-top:1px solid var(--line);padding-top:16px}
+.sync-status{display:flex;align-items:center;gap:10px;font-size:16px;font-weight:500}
+.sync-status i{width:10px;height:10px;border-radius:50%;background:var(--faint)}
+.sync-status[data-state="ok"] i{background:#3d9a74}
+.sync-status[data-state="error"] i,.sync-status[data-state="offline"] i{background:var(--warn)}
+.sync-status .sm{padding:5px 10px;font-size:13.5px;margin-left:auto}
+.row.nowrap{flex-wrap:nowrap}
+.nsec{display:flex;flex-direction:column;gap:18px}
+@media (hover:none){.keys-link{display:none}}
+@media (max-width:600px){
+  #sheet{place-items:end stretch;padding:0;padding-top:calc(24px + env(safe-area-inset-top,0px))}
+  .sheet-card,.sheet-card:not(.keys){width:100%;max-height:100%;height:auto;border-radius:16px 16px 0 0}
+  .sheet-card:not(.keys){height:min(620px,100%)}
+  .sh-head{padding:14px max(16px,env(safe-area-inset-right,0px)) 8px max(18px,env(safe-area-inset-left,0px))}
+  .tabs{margin:0 max(14px,env(safe-area-inset-right,0px)) 4px max(14px,env(safe-area-inset-left,0px))}
+  .tabs button{font-size:14px;padding:7px 6px}
+  .sh-body{padding:12px max(18px,env(safe-area-inset-right,0px)) calc(22px + env(safe-area-inset-bottom,0px)) max(18px,env(safe-area-inset-left,0px))}
+  .qr{width:112px;height:112px}
+}
 .sheet-card textarea{width:100%;min-height:64px;resize:vertical;font:13px/1.4 ui-monospace,Menlo,monospace;color:var(--fg);background:var(--desk);border:1px solid var(--line);border-radius:8px;padding:8px}
 .row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
 .row .sp{flex:1}
@@ -286,10 +318,7 @@ ul.drop{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;ga
   .cd{min-height:0}
   .cd-h .wdn{display:inline;text-transform:capitalize}
 }
-.sheet-card.keys{width:min(620px,100%);gap:18px}
-.keys-h{display:flex;align-items:center;justify-content:space-between}
-.keys-h h2{margin:0;font-size:20px;font-weight:600;letter-spacing:-.015em}
-.keys h3{margin:0 0 8px;font-size:13px;font-weight:500;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
+.sheet-card.keys{width:min(620px,100%);max-height:min(820px,calc(100dvh - 32px))}
 .keys dl{display:grid;grid-template-columns:200px minmax(0,1fr);gap:8px 18px;margin:0;align-items:baseline}
 .keys dt{white-space:nowrap;font-size:14px;color:var(--muted)}
 .keys dd{margin:0;font-size:15px}
@@ -297,7 +326,6 @@ ul.drop{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;ga
 .keys code{font:13px ui-monospace,Menlo,monospace;background:var(--hover);padding:2px 5px;border-radius:5px;color:var(--fg)}
 @media (max-width:560px){.keys dl{grid-template-columns:minmax(0,1fr)}.keys dt{white-space:normal}.keys dd{margin-bottom:6px}}
 @media (hover:none){.keys-btn{display:none}}
-.nsec{display:flex;flex-direction:column;gap:10px;border-top:1px solid var(--line);padding-top:14px}
 .nh{font-size:15px;font-weight:600}
 .note.small{font-size:13.5px}
 .nrow{display:flex;align-items:center;gap:10px;justify-content:space-between}
@@ -332,7 +360,7 @@ ul.drop{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;ga
 <div class="wrap">
   <header class="top">
     <div class="pills" id="pills"></div>
-    <button class="round cloud" id="cloud" data-act="settings" hidden data-state="wait"><svg width="19" height="19" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6 15.5h8.5a3.5 3.5 0 0 0 .4-7A5 5 0 0 0 5.2 9.3 3.1 3.1 0 0 0 6 15.5Z"/><path class="ok" d="m7.8 11.6 1.7 1.6 3-3.2"/><path class="x" d="M3 3l14 14"/></svg></button>
+    <button class="round cloud" id="cloud" data-act="syncOpen" hidden data-state="wait"><svg width="19" height="19" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6 15.5h8.5a3.5 3.5 0 0 0 .4-7A5 5 0 0 0 5.2 9.3 3.1 3.1 0 0 0 6 15.5Z"/><path class="ok" d="m7.8 11.6 1.7 1.6 3-3.2"/><path class="x" d="M3 3l14 14"/></svg></button>
     <button class="round keys-btn" data-act="keys" aria-label="Atajos de teclado" title="Atajos de teclado (?)"><svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><rect x="1.5" y="4" width="15" height="10" rx="2"/><path d="M4.5 7h.01M7.5 7h.01M10.5 7h.01M13.5 7h.01M4.5 10h.01M13.5 10h.01M7 11h4" stroke-width="1.6"/></svg></button>
     <button class="round" data-act="planOpen" aria-label="Calendario"><svg width="17" height="17" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><rect x="2.5" y="3.5" width="11" height="10" rx="2"/><path d="M2.5 6.5h11M5.5 2v3M10.5 2v3"/></svg></button>
     <button class="round" data-act="settings" aria-label="Ajustes"><svg width="17" height="17" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M2 4h7M13 4h1M2 12h1M7 12h7"/><circle cx="11" cy="4" r="1.8"/><circle cx="5" cy="12" r="1.8"/></svg></button>
@@ -567,6 +595,7 @@ function setSync(st, err){
     }
   }
   const m = $('#syncMsg'); if (m) m.textContent = syncText();
+  const ss = document.querySelector('.sync-status'); if (ss) ss.dataset.state = st;
 }
 function syncText(){ return { ok:'Sincronizado', saving:'Guardando…', wait:'Conectando…', offline:'Sin conexión', error:'Error de sincronización', off:'' }[syncState] || ''; }
 function refreshStatus(){ if (!db) return; setSync(inflight > 0 ? 'saving' : fromCache || !firstDone ? 'wait' : 'ok'); }
@@ -1062,22 +1091,53 @@ function offerDelete(p, parentId, text){
   }, 9000);
 }
 function parentOf(id){ const { p, i } = findItem(id); if (!p) return null; const pi = parentIdx(p.items, i); return pi >= 0 ? p.items[pi].id : null; }
-function openSheet(){
-  const sh = $('#sheet'), standalone = window.self === window.top;
-  sh.innerHTML = `<div class="sheet-card" role="dialog" aria-label="Ajustes">
-    <button class="switch ${S.sound?'on':''}" data-act="toggleSound"><b></b>Sonido</button>
-    ${canSync ? notifHtml() : ''}
-    ${canSync && syncCode ? `<div class="sync">
-      <div id="qr" class="qr"></div>
-      <div class="sync-txt"><strong>Abre esto en el móvil</strong><span>Escanéalo con la cámara y tendrás la misma mesa, sincronizada.</span><span id="syncMsg" class="sync-st">${syncText()}</span><span class="code">Mesa ${boardTag()}: si otro dispositivo muestra otra mesa, no están unidos.</span>
-      <div class="row"><button class="btn ghostb" data-act="copyLink">Copiar enlace</button></div></div>
-    </div>
-    <div class="row"><input class="link-in" id="linkIn" placeholder="Pega aquí un enlace o código para vincular" autocomplete="off"><button class="btn ghostb" data-act="linkDevice">Vincular</button></div>` : `<p class="note">La sincronización entre dispositivos funciona en la versión publicada en GitHub Pages.</p>`}
-    <textarea id="bk" aria-label="Copia de seguridad">${esc(JSON.stringify({ v:2, subjects:S.subjects, papers:S.papers }))}</textarea>
-    <div class="row"><button class="btn ghostb" data-act="copyBk" id="copyBtn">Copiar</button>${standalone ? '<button class="btn ghostb" data-act="dlBk">Descargar</button>' : ''}<button class="btn ghostb" data-act="restore" id="restoreBtn">Restaurar lo pegado</button></div>
-    ${(() => { try { const b = JSON.parse(lsGet(BACKUP_KEY)); return b ? `<div class="row"><button class="btn ghostb" data-act="restoreBackup">Recuperar lo que tenía este dispositivo (${new Date(b.at).toLocaleDateString('es', { day:'numeric', month:'short' })})</button></div>` : ''; } catch(e){ return ''; } })()}
-    <div class="row"><button class="btn danger" data-act="wipe">Borrar todo</button><span class="sp"></span><button class="btn" data-act="closeSheet">Listo</button></div>
+let sheetTab = 'general';
+const TABS = [['general', 'General'], ['sync', 'Sincronizar'], ['notif', 'Avisos'], ['adv', 'Avanzado']];
+function sheetShell(title, body, tabs){
+  return `<div class="sheet-card" role="dialog" aria-label="${title}">
+    <header class="sh-head"><h2>${title}</h2><button class="sh-done" data-act="closeSheet">Listo</button></header>
+    ${tabs || ''}
+    <div class="sh-body">${body}</div>
   </div>`;
+}
+function syncTabHtml(){
+  if (!canSync || !syncCode) return `<p class="note">La sincronización entre dispositivos funciona en la versión publicada en GitHub Pages.</p>`;
+  return `<section class="sec">
+      <div class="sync-status" data-state="${syncState}"><i></i><span id="syncMsg">${syncText()}</span>${syncState === 'error' ? '<button class="btn ghostb sm" data-act="retrySync">Reintentar</button>' : ''}</div>
+      <p class="note small">Mesa <b>${boardTag()}</b>. Si otro dispositivo muestra otras letras, no están unidos.</p>
+    </section>
+    <section class="sec">
+      <h3>Añadir otro dispositivo</h3>
+      <div class="sync"><div id="qr" class="qr"></div>
+        <div class="sync-txt"><span>Escanea el código con la cámara del otro dispositivo, o envíale el enlace.</span>
+        <div class="row"><button class="btn ghostb" data-act="copyLink">Copiar enlace</button></div></div>
+      </div>
+    </section>
+    <section class="sec">
+      <h3>Unir este dispositivo a otra mesa</h3>
+      <div class="row nowrap"><input class="link-in" id="linkIn" placeholder="Pega el enlace o el código" autocomplete="off"><button class="btn ghostb" data-act="linkDevice">Vincular</button></div>
+    </section>`;
+}
+function advTabHtml(){
+  const standalone = window.self === window.top;
+  const bk = (() => { try { return JSON.parse(lsGet(BACKUP_KEY)); } catch(e){ return null; } })();
+  return `<section class="sec">
+      <h3>Copia de seguridad</h3>
+      <p class="note small">Todo tu contenido en texto. Cópialo o descárgalo para guardarlo; para restaurar, pega aquí una copia y pulsa Restaurar.</p>
+      <textarea id="bk" aria-label="Copia de seguridad">${esc(JSON.stringify({ v:2, subjects:S.subjects, papers:S.papers }))}</textarea>
+      <div class="row"><button class="btn ghostb" data-act="copyBk">Copiar</button>${standalone ? '<button class="btn ghostb" data-act="dlBk">Descargar</button>' : ''}<button class="btn ghostb" data-act="restore">Restaurar</button></div>
+    </section>
+    ${bk ? `<section class="sec"><h3>Versión anterior de este dispositivo</h3><p class="note small">Lo que había aquí antes de unirlo a la mesa (${new Date(bk.at).toLocaleDateString('es', { day:'numeric', month:'short' })}).</p><div class="row"><button class="btn ghostb" data-act="restoreBackup">Recuperar</button></div></section>` : ''}
+    <section class="sec"><h3>Borrar</h3><div class="row"><button class="btn danger" data-act="wipe">Borrar todo</button></div></section>`;
+}
+function openSheet(tab){
+  if (tab) sheetTab = tab;
+  const body = sheetTab === 'sync' ? syncTabHtml() : sheetTab === 'notif' ? (canSync ? notifHtml() : '<p class="note">Las notificaciones funcionan en la versión publicada en GitHub Pages.</p>') : sheetTab === 'adv' ? advTabHtml()
+    : `<section class="sec"><button class="switch ${S.sound?'on':''}" data-act="toggleSound"><b></b>Sonido al marcar</button></section>
+       <section class="sec keys-link"><button class="btn ghostb" data-act="keys">Ver atajos de teclado</button></section>`;
+  const tabs = `<nav class="tabs" role="tablist">${TABS.map(([k, l]) => `<button role="tab" aria-selected="${k === sheetTab}" class="${k === sheetTab ? 'on' : ''}" data-act="tab" data-t="${k}">${l}</button>`).join('')}</nav>`;
+  const sh = $('#sheet');
+  sh.innerHTML = sheetShell('Ajustes', body, tabs);
   sh.hidden = false;
   const box = $('#qr');
   if (box) (window.qrcode ? Promise.resolve() : loadScript('https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.js')).then(() => {
@@ -1278,10 +1338,10 @@ function notifHtml(){
   else if (Notification.permission === 'denied') { status = 'Bloqueadas en los ajustes del navegador para esta web.'; btns = ''; }
   else if (on) { status = 'Activadas en este dispositivo' + (devs > 1 ? ` y en ${devs - 1} más` : '') + '.'; btns = '<button class="btn ghostb" data-act="pushTest">Probar</button><button class="btn ghostb" data-act="pushOff">Desactivar aquí</button>'; }
   else { status = devs ? `Activadas en ${devs} dispositivo${devs > 1 ? 's' : ''}, no en este.` : 'Desactivadas.'; btns = '<button class="btn" data-act="pushOn">Activar en este dispositivo</button>'; }
-  return `<div class="nsec"><div class="nh">Notificaciones</div><p class="note" id="pushMsg">${status}</p>${btns ? `<div class="row">${btns}</div>` : ''}
+  return `<div class="nsec"><section class="sec"><h3>Este dispositivo</h3><p class="note" id="pushMsg">${status}</p>${btns ? `<div class="row">${btns}</div>` : ''}</section><section class="sec"><h3>Avisos automáticos</h3>
     <div class="nrow"><button class="switch ${notifCfg.daily ? 'on' : ''}" data-act="nDaily"><b></b>Resumen de lo que toca cada día</button><input type="time" id="nDailyT" value="${notifCfg.daily || '08:30'}"></div>
     <div class="nrow"><button class="switch ${notifCfg.dates ? 'on' : ''}" data-act="nDates"><b></b>Aviso el día antes de cada fecha de papel</button><input type="time" id="nDatesT" value="${notifCfg.datesTime || '19:00'}"></div>
-    <p class="note small">Además, cada papel o tarea puede tener sus propios avisos desde su menú (Recordatorio…).</p></div>`;
+    </section><p class="note small">Además, cada papel o tarea puede tener sus propios avisos desde su menú (Recordatorio…).</p></div>`;
 }
 /* reminders of a sheet ('p') or a line ('i') */
 let remDraft = { d:0 };
@@ -1343,10 +1403,8 @@ function openKeys(){
     ]],
   ];
   const sh = $('#sheet');
-  sh.innerHTML = `<div class="sheet-card keys" role="dialog" aria-label="Atajos de teclado">
-    <div class="keys-h"><h2>Atajos</h2><button class="btn" data-act="closeSheet">Listo</button></div>
-    ${groups.map(([g, rows]) => `<section><h3>${g}</h3><dl>${rows.map(([k, d]) => `<dt>${k}</dt><dd>${d}</dd>`).join('')}</dl></section>`).join('')}
-  </div>`;
+  sh.innerHTML = sheetShell('Atajos de teclado', groups.map(([g, rows]) => `<section class="sec"><h3>${g}</h3><dl>${rows.map(([k, d]) => `<dt>${k}</dt><dd>${d}</dd>`).join('')}</dl></section>`).join(''));
+  sh.querySelector('.sheet-card').classList.add('keys');
   sh.hidden = false;
 }
 
@@ -1422,6 +1480,8 @@ const A = {
   undo(){ undo(); },
   offer(){ const f = offerFn; offerFn = null; $('#toast').hidden = true; f && f(); },
   settings(){ openSheet(); },
+  syncOpen(){ openSheet('sync'); },
+  tab(_, b){ openSheet(b.dataset.t); },
   keys(){ openKeys(); },
   async pushOn(_, b){
     const m = $('#pushMsg'); b.textContent = 'Activando…';
