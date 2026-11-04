@@ -124,7 +124,7 @@ export function due(board, since, now){
 
 /* ---------- run ---------- */
 async function main(){
-  if (!KEY) throw new Error('Falta el secreto PUSH_KEY');
+  if (!KEY) { console.log('Falta el secreto PUSH_KEY: no se envía nada.'); return; }
   webpush.setVapidDetails(APP_URL, PUB, KEY);
   const reg = await getDoc(REGISTRY);
   const codes = new Set();
