@@ -1,0 +1,33 @@
+name: Notificaciones
+on:
+  schedule:
+    - cron: '*/5 * * * *'
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: notify
+  cancel-in-progress: false
+jobs:
+  send:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: npm install --no-save --no-package-lock web-push@3.6.7
+      - run: node .github/notify.mjs
+        env:
+          PUSH_KEY: ${{ secrets.PUSH_KEY }}
+      # GitHub pauses scheduled jobs in repos without commits for 60 days; this keeps it running
+      - name: Mantener activo
+        run: |
+          last=$(git log -1 --format=%ct); now=$(date +%s)
+          if [ $((now-last)) -gt $((45*86400)) ]; then
+            date -u > .github/keepalive
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add .github/keepalive && git commit -m "Mantener activas las notificaciones" && git push
+          fi

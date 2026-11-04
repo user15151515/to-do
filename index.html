@@ -297,6 +297,25 @@ ul.drop{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;ga
 .keys code{font:13px ui-monospace,Menlo,monospace;background:var(--hover);padding:2px 5px;border-radius:5px;color:var(--fg)}
 @media (max-width:560px){.keys dl{grid-template-columns:minmax(0,1fr)}.keys dt{white-space:normal}.keys dd{margin-bottom:6px}}
 @media (hover:none){.keys-btn{display:none}}
+.nsec{display:flex;flex-direction:column;gap:10px;border-top:1px solid var(--line);padding-top:14px}
+.nh{font-size:15px;font-weight:600}
+.note.small{font-size:13.5px}
+.nrow{display:flex;align-items:center;gap:10px;justify-content:space-between}
+.nrow .switch{flex:1;min-width:0}
+.nrow input[type=time],.rem-add input[type=time]{font:15px var(--ui);color:var(--fg);background:var(--hover);border:0;border-radius:8px;padding:6px 8px}
+.ibell,.pbell{display:inline-grid;place-items:center}
+.pbell{padding:2px 4px}
+.pop-h2{font-size:13px;font-weight:500;color:var(--muted);padding:8px 10px 4px}
+.rem-row{display:flex;align-items:center;gap:8px;padding:6px 10px;font-size:14.5px}
+.rem-row span{flex:1}
+.rem-row svg{color:var(--muted);flex:none}
+.rem-x{all:unset;cursor:pointer;color:var(--faint);padding:2px 6px;border-radius:6px}
+.rem-x:hover{color:var(--warn);background:var(--hover)}
+.rem-days{display:flex;flex-wrap:wrap;gap:6px;padding:6px 8px 2px}
+.rem-days button{all:unset;cursor:pointer;font-size:14px;padding:6px 10px;border-radius:999px;box-shadow:inset 0 0 0 1px var(--line);color:var(--muted)}
+.rem-days button.on{background:var(--fg);color:var(--paper);box-shadow:none}
+.rem-add{display:flex;gap:8px;align-items:center;padding:8px}
+.rem-add .btn{padding:7px 12px;font-size:14px}
 #toast{position:fixed;z-index:70;left:50%;transform:translateX(-50%);bottom:calc(22px + env(safe-area-inset-bottom,0px));background:var(--fg);color:var(--paper);border-radius:999px;box-shadow:var(--shadow)}
 #toast button{all:unset;cursor:pointer;font-size:15px;font-weight:500;padding:10px 20px;display:block}
 
@@ -350,6 +369,7 @@ const I = {
   up:'<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 10l4-4 4 4"/></svg>',
   down:'<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6l4 4 4-4"/></svg>',
   more:'<svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><circle cx="3.5" cy="8" r="1.3"/><circle cx="8" cy="8" r="1.3"/><circle cx="12.5" cy="8" r="1.3"/></svg>',
+  bell:'<svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11V7.5a4 4 0 0 1 8 0V11l1 1.5H3L4 11Z"/><path d="M6.5 14a1.6 1.6 0 0 0 3 0"/></svg>',
   check:'<svg width="11" height="11" viewBox="0 0 11 11" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 5.8 4.4 8.2 9 3"/></svg>',
 };
 
@@ -427,6 +447,7 @@ const lsGet = k => { try { return localStorage.getItem(k); } catch(e){ return nu
 const lsSet = (k,v) => { try { localStorage.setItem(k, v); } catch(e){} };
 const genCode = (n=24) => { const a = new Uint8Array(n); crypto.getRandomValues(a); return Array.from(a, b => 'abcdefghijkmnpqrstuvwxyz23456789'[b % 32]).join(''); };
 const canSync = window.self === window.top && /^https?:$/.test(location.protocol);
+const DEV = lsGet(DEV_KEY) || (() => { const d = genCode(12); lsSet(DEV_KEY, d); return d; })();
 const validCode = c => typeof c === 'string' && /^[a-z0-9]{20,64}$/.test(c);
 let db = null, docRef = null, unsub = null, syncCode = null, pushT = null, retryT = null, stuckT = null, pendingRemote = null;
 let syncState = 'off', syncErr = '', inflight = 0, fromCache = true, firstDone = false, linking = false;
@@ -604,6 +625,7 @@ function applyRemote(remote){
     if (checkResets()) render();
     lastData = dataStr();
     push();
+    setTimeout(refreshSubscription, 1500);
     if (!remote.legacy && !remote.empty && !fromCache) writeBase(remote);
     refreshStatus();
     return;
@@ -624,7 +646,9 @@ function listen(){
     const md = snap.metadata;
     fromCache = md.fromCache;
     if (md.fromCache && !firstDone) { refreshStatus(); return; }      // wait for the real server state on start
-    const remote = remoteFromSnap(snap.exists ? snap.data() : null);
+    const raw = snap.exists ? snap.data() : null;
+    notifCfg = raw?.notif || {}; remoteSubs = raw?.subs || {};
+    const remote = remoteFromSnap(raw);
     const confirmed = !md.hasPendingWrites && !md.fromCache && !remote.legacy && !remote.empty;
     if (md.hasPendingWrites && firstDone) { refreshStatus(); return; } // our own write echoing back
     applyRemote(remote);
@@ -812,6 +836,7 @@ function itemMeta(x){
   let h = '';
   if (x.date) { const n = days(x.date), cls = n < 0 && !x.done ? 'late' : (n >= 0 && n <= 2 && !x.done ? 'soon' : ''); h += `<button class="idate ${cls}" data-act="iDate" data-id="${x.id}" title="${fmtLong(x.date)}">${shortDate(x.date)}</button>`; }
   if (x.repeat) h += `<button class="irep" data-act="iRepeat" data-id="${x.id}" title="${repText(x.repeat)}">↻</button>`;
+  if (x.rem?.length) h += `<button class="irep ibell" data-act="iRemind" data-id="${x.id}" title="Avisos">${I.bell}</button>`;
   return h;
 }
 /* which lines are shown: folded lines hide their sub-lines; "hide done" hides finished lines */
@@ -842,7 +867,7 @@ function paperHtml(p){
   return `<article class="paper ${p.fold?'folded':''} ${s?'has-sub':''} ${global?'global':''} ${t && d===t ? 'complete' : ''}" data-id="${p.id}" ${s ? `style="--c:${s.color}"` : ''}>
     <span class="p-grip" aria-hidden="true">${I.grip}</span>
     <header class="p-head">
-      ${s && !global ? `<span class="p-sub">${esc(s.name)}</span>` : ''}${whenHtml(p)}${p.fold && t ? `<span class="pcount">${d}/${t}</span>` : ''}<span class="sp"></span>
+      ${s && !global ? `<span class="p-sub">${esc(s.name)}</span>` : ''}${whenHtml(p)}${p.rem?.length ? `<button class="when pbell" data-act="pRemind" data-id="${p.id}" title="Avisos">${I.bell}</button>` : ''}${p.fold && t ? `<span class="pcount">${d}/${t}</span>` : ''}<span class="sp"></span>
       <span class="ic ${p.date?'':''}" title="Fecha">${I.cal}<input class="dt" type="date" data-id="${p.id}" value="${p.date||''}" aria-label="Fecha"></span>
       <button class="ic ${p.progress?'on':''}" data-act="pProgress" data-id="${p.id}" aria-label="Barra de progreso">${I.prog}</button>
       <button class="ic ${p.fold?'on':''}" data-act="pFold" data-id="${p.id}" aria-label="${p.fold ? 'Desplegar papel' : 'Plegar papel'}">${p.fold ? I.down : I.up}</button>
@@ -1041,6 +1066,7 @@ function openSheet(){
   const sh = $('#sheet'), standalone = window.self === window.top;
   sh.innerHTML = `<div class="sheet-card" role="dialog" aria-label="Ajustes">
     <button class="switch ${S.sound?'on':''}" data-act="toggleSound"><b></b>Sonido</button>
+    ${canSync ? notifHtml() : ''}
     ${canSync && syncCode ? `<div class="sync">
       <div id="qr" class="qr"></div>
       <div class="sync-txt"><strong>Abre esto en el móvil</strong><span>Escanéalo con la cámara y tendrás la misma mesa, sincronizada.</span><span id="syncMsg" class="sync-st">${syncText()}</span><span class="code">Mesa ${boardTag()}: si otro dispositivo muestra otra mesa, no están unidos.</span>
@@ -1189,6 +1215,96 @@ function planAuto(){
   if (moved) render();
 }
 
+/* ---------- notifications ----------
+   The app only stores what to remind and this device's push subscription in the board; a scheduled job on GitHub
+   (.github/notify.mjs) reads them every few minutes and sends the notifications, also when the app is closed. */
+const VAPID = 'BM3ij87p5-xgw6B6LjdSPAcXmVXG0BLBg37Ov0ieBbal6Gr2qa3uIjJ86DHC7nW1GkortHaI3_JXr-vmljuW01Q';
+const REGISTRY = 'semestre_push_registry_v1';
+let notifCfg = {}, remoteSubs = {}, pushNoteShown = false;
+const b64uBytes = s => { const b = atob(s.replace(/-/g, '+').replace(/_/g, '/') + '==='.slice((s.length + 3) % 4)); return Uint8Array.from(b, c => c.charCodeAt(0)); };
+const bytesB64u = buf => btoa(String.fromCharCode(...new Uint8Array(buf))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+const isIOS = /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+const standalone = matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
+const pushCapable = () => 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
+const pushOnHere = () => pushCapable() && Notification.permission === 'granted' && !!remoteSubs[DEV];
+async function encryptCode(code){
+  const srvKey = await crypto.subtle.importKey('raw', b64uBytes(VAPID), { name:'ECDH', namedCurve:'P-256' }, false, []);
+  const eph = await crypto.subtle.generateKey({ name:'ECDH', namedCurve:'P-256' }, true, ['deriveBits']);
+  const bits = await crypto.subtle.deriveBits({ name:'ECDH', public:srvKey }, eph.privateKey, 256);
+  const key = await crypto.subtle.importKey('raw', await crypto.subtle.digest('SHA-256', bits), 'AES-GCM', false, ['encrypt']);
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const c = await crypto.subtle.encrypt({ name:'AES-GCM', iv }, key, new TextEncoder().encode(code));
+  return JSON.stringify({ e:bytesB64u(await crypto.subtle.exportKey('raw', eph.publicKey)), iv:bytesB64u(iv), c:bytesB64u(c) });
+}
+async function registerBoard(){
+  const h = bytesB64u(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(syncCode))).slice(0, 22);
+  await db.collection('boards').doc(REGISTRY).set({ r:{ [h]:await encryptCode(syncCode) } }, { merge:true });
+}
+const tzName = () => { try { return Intl.DateTimeFormat().resolvedOptions().timeZone || 'Europe/Madrid'; } catch(e){ return 'Europe/Madrid'; } };
+async function saveSubscription(sub){
+  await docRef.set({ subs:{ [DEV]:JSON.stringify(sub) }, notif:{ tz:tzName() } }, { merge:true });
+  remoteSubs[DEV] = JSON.stringify(sub);
+  await registerBoard();
+}
+async function enablePush(){
+  if (!pushCapable()) return isIOS && !standalone ? 'Añade la app a la pantalla de inicio y actívalas desde ahí.' : 'Este navegador no admite notificaciones.';
+  if (!docRef) return 'Espera a que termine de sincronizar e inténtalo otra vez.';
+  const perm = await Notification.requestPermission();
+  if (perm !== 'granted') return 'Has bloqueado los avisos. Permítelos en los ajustes del navegador para esta web.';
+  try {
+    const reg = await navigator.serviceWorker.ready;
+    const sub = await reg.pushManager.getSubscription() || await reg.pushManager.subscribe({ userVisibleOnly:true, applicationServerKey:b64uBytes(VAPID) });
+    await saveSubscription(sub);
+    return '';
+  } catch(e) { return 'No se pudo activar: ' + (e.message || e); }
+}
+async function disablePush(){
+  try { const reg = await navigator.serviceWorker.ready; const sub = await reg.pushManager.getSubscription(); if (sub) await sub.unsubscribe(); } catch(e){}
+  if (docRef) await docRef.set({ subs:{ [DEV]:firebase.firestore.FieldValue.delete() } }, { merge:true });
+  delete remoteSubs[DEV];
+}
+async function refreshSubscription(){   // endpoints can change; keep this device's one and the time zone up to date
+  if (!pushCapable() || Notification.permission !== 'granted' || !docRef) return;
+  try {
+    const reg = await navigator.serviceWorker.ready, sub = await reg.pushManager.getSubscription();
+    if (sub && (remoteSubs[DEV] !== JSON.stringify(sub) || notifCfg.tz !== tzName())) await saveSubscription(sub);
+  } catch(e){}
+}
+function setNotif(patch){ notifCfg = { ...notifCfg, ...patch }; if (docRef) docRef.set({ notif:{ ...patch, tz:tzName() } }, { merge:true }); }
+function notifHtml(){
+  const devs = Object.keys(remoteSubs).length, on = pushOnHere();
+  let status, btns;
+  if (!pushCapable()) { status = isIOS && !standalone ? 'En iPhone, añade la app a la pantalla de inicio y actívalas desde ahí.' : 'Este navegador no admite notificaciones.'; btns = ''; }
+  else if (Notification.permission === 'denied') { status = 'Bloqueadas en los ajustes del navegador para esta web.'; btns = ''; }
+  else if (on) { status = 'Activadas en este dispositivo' + (devs > 1 ? ` y en ${devs - 1} más` : '') + '.'; btns = '<button class="btn ghostb" data-act="pushTest">Probar</button><button class="btn ghostb" data-act="pushOff">Desactivar aquí</button>'; }
+  else { status = devs ? `Activadas en ${devs} dispositivo${devs > 1 ? 's' : ''}, no en este.` : 'Desactivadas.'; btns = '<button class="btn" data-act="pushOn">Activar en este dispositivo</button>'; }
+  return `<div class="nsec"><div class="nh">Notificaciones</div><p class="note" id="pushMsg">${status}</p>${btns ? `<div class="row">${btns}</div>` : ''}
+    <div class="nrow"><button class="switch ${notifCfg.daily ? 'on' : ''}" data-act="nDaily"><b></b>Resumen de lo que toca cada día</button><input type="time" id="nDailyT" value="${notifCfg.daily || '08:30'}"></div>
+    <div class="nrow"><button class="switch ${notifCfg.dates ? 'on' : ''}" data-act="nDates"><b></b>Aviso el día antes de cada fecha de papel</button><input type="time" id="nDatesT" value="${notifCfg.datesTime || '19:00'}"></div>
+    <p class="note small">Además, cada papel o tarea puede tener sus propios avisos desde su menú (Recordatorio…).</p></div>`;
+}
+/* reminders of a sheet ('p') or a line ('i') */
+let remDraft = { d:0 };
+const remTarget = (k, id) => k === 'p' ? P(id) : findItem(id).it;
+const remPaperId = (k, id) => k === 'p' ? id : findItem(id).p?.id;
+function remText(r, rep){
+  const t = r.t || '09:00';
+  if (rep) return `Cada vez que toque, a las ${t}`;
+  return `${r.d === 0 ? 'El mismo día' : r.d === 1 ? 'El día antes' : r.d === 7 ? 'Una semana antes' : r.d + ' días antes'}, a las ${t}`;
+}
+function remHtml(k, id){
+  const x = remTarget(k, id); if (!x) return '';
+  const rep = k === 'i' && x.repeat, who = k === 'p' ? 'Este papel' : 'Esta tarea';
+  if (!x.date && !rep) return `<p class="rep-hint">${who} no tiene fecha. Pónsela para poder avisarte.</p>
+    <div class="quick"><button data-act="remQd" data-k="${k}" data-id="${id}" data-n="0">Hoy</button><button data-act="remQd" data-k="${k}" data-id="${id}" data-n="1">Mañana</button><button data-act="remQd" data-k="${k}" data-id="${id}" data-n="7">+1 sem</button></div>`;
+  const list = (x.rem || []).map((r, i) => `<div class="rem-row">${I.bell}<span>${remText(r, rep)}</span><button class="rem-x" data-act="remDel" data-k="${k}" data-id="${id}" data-i="${i}" aria-label="Quitar aviso">✕</button></div>`).join('');
+  const opts = rep ? '' : `<div class="rem-days">${[[0,'Ese día'],[1,'1 día antes'],[2,'2 días antes'],[7,'1 sem. antes']].map(([d, l]) => `<button class="${remDraft.d === d ? 'on' : ''}" data-act="remD" data-k="${k}" data-id="${id}" data-d="${d}">${l}</button>`).join('')}</div>`;
+  return `<div class="pop-h2">Avisarme</div>${list}${opts}
+    <div class="rem-add"><input type="time" id="remT" value="${remDraft.t || (k === 'p' ? '19:00' : '09:00')}" aria-label="Hora"><button class="btn" data-act="remAdd" data-k="${k}" data-id="${id}">Añadir aviso</button></div>
+    ${pushOnHere() ? '' : `<p class="rep-hint">${pushCapable() ? 'Las notificaciones no están activadas en este dispositivo.' : 'Este dispositivo no puede recibir notificaciones.'}</p>${pushCapable() && Notification.permission !== 'denied' ? '<button class="mi" data-act="pushOn">Activar notificaciones aquí</button>' : ''}`}`;
+}
+function remRefresh(k, id){ const pid = remPaperId(k, id); if (pid) updatePaper(pid); menu.innerHTML = remHtml(k, id); }
+
 /* ---------- keyboard shortcuts sheet ---------- */
 function openKeys(){
   const mac = /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent), M = mac ? '⌘' : 'Ctrl', K = x => `<kbd>${x}</kbd>`;
@@ -1307,6 +1423,27 @@ const A = {
   offer(){ const f = offerFn; offerFn = null; $('#toast').hidden = true; f && f(); },
   settings(){ openSheet(); },
   keys(){ openKeys(); },
+  async pushOn(_, b){
+    const m = $('#pushMsg'); b.textContent = 'Activando…';
+    const err = await enablePush();
+    if (!$('#sheet').hidden) openSheet(); else if (!menu.hidden) { hideMenu(); }
+    if (err) { const mm = $('#pushMsg'); if (mm) mm.textContent = err; else toast(err, () => openSheet(), 8000); }
+  },
+  async pushOff(){ await disablePush(); openSheet(); },
+  async pushTest(){ try { const reg = await navigator.serviceWorker.ready; reg.showNotification('Semestre', { body:'Así se verán los avisos.', icon:'icon-192.png', tag:'test' }); } catch(e){} },
+  nDaily(_, b){ setNotif({ daily:notifCfg.daily ? '' : ($('#nDailyT')?.value || '08:30') }); b.classList.toggle('on', !!notifCfg.daily); },
+  nDates(_, b){ setNotif({ dates:!notifCfg.dates, datesTime:$('#nDatesT')?.value || '19:00' }); b.classList.toggle('on', !!notifCfg.dates); },
+  remOpen(id, b){ remDraft = { d:0 }; menu.innerHTML = remHtml(b.dataset.k, id); },
+  iRemind(id, b){ remDraft = { d:0 }; const r = b.getBoundingClientRect(); showMenu(remHtml('i', id), r.left - 120, r.bottom); },
+  pRemind(id, b){ remDraft = { d:1 }; const r = b.getBoundingClientRect(); showMenu(remHtml('p', id), r.left, r.bottom); },
+  remD(id, b){ remDraft = { d:+b.dataset.d, t:$('#remT')?.value }; menu.innerHTML = remHtml(b.dataset.k, id); },
+  remQd(id, b){ const x = remTarget(b.dataset.k, id); x.date = iso(addDays(+b.dataset.n)); remRefresh(b.dataset.k, id); },
+  remAdd(id, b){
+    const k = b.dataset.k, x = remTarget(k, id), t = $('#remT')?.value || '09:00', d = k === 'i' && x.repeat ? 0 : remDraft.d;
+    x.rem = (x.rem || []).filter(r => !(r.d === d && r.t === t)).concat([{ d, t }]).sort((a, b) => b.d - a.d || a.t.localeCompare(b.t));
+    remDraft.t = t; remRefresh(k, id);
+  },
+  remDel(id, b){ const k = b.dataset.k, x = remTarget(k, id); x.rem.splice(+b.dataset.i, 1); if (!x.rem.length) delete x.rem; remRefresh(k, id); },
   closeSheet(){ $('#sheet').hidden = true; },
   toggleSound(_, b){ S.sound = !S.sound; b.classList.toggle('on', S.sound); save(); if (S.sound) sound('check'); },
   retrySync(){ retrySync(); },
@@ -1360,6 +1497,9 @@ board.addEventListener('click', e => {
   e.preventDefault(); openDate(inp);
 });
 document.addEventListener('change', e => {
+  if (e.target.id === 'nDailyT') { if (notifCfg.daily) setNotif({ daily:e.target.value || '08:30' }); return; }
+  if (e.target.id === 'nDatesT') { setNotif({ datesTime:e.target.value || '19:00' }); return; }
+  if (e.target.id === 'remT') { remDraft.t = e.target.value; return; }
   if (e.target.id === 'planEnd') {
     const v = e.target.value; S.planEnd = v && v !== planDefaultEnd() ? v : ''; render();
     return;
@@ -1396,6 +1536,7 @@ function paperMenu(id, x, y){
     ${parents && !p.fold ? `<button class="mi" data-act="pFoldAll" data-id="${id}">${allFolded ? 'Desplegar subapartados' : 'Plegar subapartados'}</button>` : ''}
     ${anyDone || p.hideDone ? `<button class="mi" data-act="pHideDone" data-id="${id}">${p.hideDone ? 'Mostrar hechas' : 'Ocultar hechas'}</button>` : ''}
     <div class="msep"></div>
+    <button class="mi" data-act="remOpen" data-k="p" data-id="${id}">${p.rem?.length ? `Recordatorio (${p.rem.length})` : 'Recordatorio…'}</button>
     <button class="mi" data-act="pDup" data-id="${id}">Duplicar papel</button>
     ${anyDone ? `<button class="mi" data-act="pUncheck" data-id="${id}">Desmarcar todo</button>` : ''}
     ${any ? `<button class="mi" data-act="pEmpty" data-id="${id}">Vaciar papel</button>` : ''}
@@ -1429,6 +1570,7 @@ function itemMenu(id, x, y){
     <div class="msep"></div>
     <button class="mi" data-act="iDateMenu" data-id="${id}">${it.date ? 'Cambiar fecha' : 'Poner fecha'}</button>
     <button class="mi" data-act="iRepeatMenu" data-id="${id}">${it.repeat ? 'Repetición: ' + repText(it.repeat) : 'Repetir…'}</button>
+    <button class="mi" data-act="remOpen" data-k="i" data-id="${id}">${it.rem?.length ? `Recordatorio (${it.rem.length})` : 'Recordatorio…'}</button>
     <div class="msep"></div>
     <button class="mi danger" data-act="iDel" data-id="${id}">Eliminar</button>`, x, y);
 }
@@ -1616,7 +1758,7 @@ document.addEventListener('paste', e => {
   document.execCommand('insertText', false, text.replace(/\s*\n\s*/g,' '));
 });
 
-window.__sem = { get S(){ return S; }, code:() => syncCode, render:() => render() }; // handle for automated tests
+window.__sem = { get S(){ return S; }, code:() => syncCode, render:() => render(), encryptCode, registerBoard, dev:DEV, doc:() => docRef }; // handle for automated tests
 render();
 startSync();
 setInterval(() => { if (!sorting && (!canSync || firstDone) && checkResets()) render(); }, 60000);
