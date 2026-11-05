@@ -348,9 +348,47 @@ ul.drop{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;ga
 #toast button{all:unset;cursor:pointer;font-size:15px;font-weight:500;padding:10px 20px;display:block}
 
 @media (max-width:760px){
-  .wrap{padding-block:14px 140px}
-  .top{margin-bottom:18px}
-  .paper{padding-right:12px}
+  .wrap{padding-block:0 140px}
+  /* one compact sticky bar: subjects scroll sideways, icons stay on the right */
+  .top{position:sticky;top:env(safe-area-inset-top,0px);z-index:30;align-items:center;gap:4px;margin:0 calc(-1 * max(16px,env(safe-area-inset-right,0px))) 14px calc(-1 * max(16px,env(safe-area-inset-left,0px)));
+    padding:10px max(10px,env(safe-area-inset-right,0px)) 10px max(12px,env(safe-area-inset-left,0px));background:var(--desk);box-shadow:0 1px 0 var(--line)}
+  .pills{flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;gap:2px;margin-right:2px;
+    -webkit-mask-image:linear-gradient(90deg,#000 calc(100% - 22px),transparent);mask-image:linear-gradient(90deg,#000 calc(100% - 22px),transparent);padding-right:18px}
+  .pills::-webkit-scrollbar{display:none}
+  .pill{flex:none;padding:0 12px;touch-action:pan-x}
+  .round{width:38px;height:38px}
+  .top .round.new{position:fixed;z-index:40;right:max(18px,calc(env(safe-area-inset-right,0px) + 12px));bottom:calc(20px + env(safe-area-inset-bottom,0px));width:56px;height:56px;box-shadow:var(--shadow)}
+  .top .round.new svg{width:22px;height:22px}
+  .board{gap:14px}
+  .col{gap:14px;min-height:0;padding-bottom:0}
+  .paper{padding:12px 12px 4px 28px}
+  .paper::before{left:16px}
+  .p-head{gap:0}
+  .ic{width:36px;height:36px}
+  .ic[data-act="pProgress"],.ic[data-act="pFold"]{display:none}
+  .when{white-space:nowrap}
+  .p-sub{max-width:52%}
+  .it{grid-template-columns:24px minmax(0,1fr) auto 30px}
+  .cb{width:20px;height:20px;margin-top:6px}
+  .bullet{min-height:var(--lh)}
+  /* menus become a sheet at the bottom, easy to reach with the thumb */
+  #menu{left:8px!important;right:8px;top:auto!important;bottom:calc(8px + env(safe-area-inset-bottom,0px));max-height:min(72vh,560px);overflow-y:auto;border-radius:16px;padding:6px}
+  .mi{padding:12px 14px;font-size:16px}
+  #syncbar{width:calc(100vw - 24px);flex-wrap:wrap}
+  #toast{bottom:calc(88px + env(safe-area-inset-bottom,0px))}
+  /* calendar */
+  .pl-head{gap:8px}
+  .pl-head h2{flex:1}
+  .pl-head .sp{display:none}
+  .pl-end{order:3;flex:1 1 100%}
+  .pl-end input{flex:1}
+  .pl-head .btn{order:4;flex:1;text-align:center;font-size:14px;padding:9px 8px}
+  .pl-papers{flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;margin:0 -16px;padding:2px 16px}
+  .pl-papers::-webkit-scrollbar{display:none}
+  .ppill{flex:none}
+  .cd{padding:8px}
+  .cd{gap:2px;padding:7px 8px}
+  .cd ul.drop{min-height:22px}
 }
 @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
 </style>
@@ -1435,6 +1473,7 @@ const A = {
     render(); toast();
   },
   planCheck(id){ toggle(id); renderPlanner(); },
+  pProgressM(id){ hideMenu(); const p = P(id); p.progress = !p.progress; updatePaper(id); },
   pFold(id){ hideMenu(); const p = P(id); p.fold = !p.fold; updatePaper(id); },
   pHideDone(id){ hideMenu(); const p = P(id); p.hideDone = !p.hideDone; updatePaper(id); },
   pFoldAll(id){
@@ -1576,7 +1615,7 @@ document.addEventListener('focusout', e => {
 let drag = null, ghost = null, hoverPaper = null, suppressClick = false, lastTap = { id:null, t:0 };
 pills.addEventListener('pointerdown', e => {
   const pill = e.target.closest('.pill[data-sid]'); if (!pill || pill.classList.contains('editing') || e.button > 0) return;
-  drag = { sid:pill.dataset.sid, pill, x:e.clientX, y:e.clientY, pid:e.pointerId, active:false };
+  drag = { sid:pill.dataset.sid, pill, x:e.clientX, y:e.clientY, pid:e.pointerId, active:false, touch:e.pointerType !== "mouse" };
   if (e.pointerType !== 'mouse') drag.timer = setTimeout(() => { if (drag && !drag.active) { const d = drag; endDrag(); lastTap = { id:null, t:0 }; openMenu(d.sid, d.x, d.y); try { navigator.vibrate && navigator.vibrate(10); } catch(_){} } }, 480);
 });
 pills.addEventListener('contextmenu', e => {
@@ -1593,6 +1632,7 @@ function paperMenu(id, x, y){
   showMenu(`<button class="mi" data-act="planOpen" data-id="${id}">Repartir en calendario</button>
     <div class="msep"></div>
     <button class="mi" data-act="pFold" data-id="${id}">${p.fold ? 'Desplegar papel' : 'Plegar papel'}</button>
+    <button class="mi" data-act="pProgressM" data-id="${id}">${p.progress ? 'Quitar barra de progreso' : 'Mostrar barra de progreso'}</button>
     ${parents && !p.fold ? `<button class="mi" data-act="pFoldAll" data-id="${id}">${allFolded ? 'Desplegar subapartados' : 'Plegar subapartados'}</button>` : ''}
     ${anyDone || p.hideDone ? `<button class="mi" data-act="pHideDone" data-id="${id}">${p.hideDone ? 'Mostrar hechas' : 'Ocultar hechas'}</button>` : ''}
     <div class="msep"></div>
@@ -1654,11 +1694,12 @@ board.addEventListener('pointerdown', e => {
 });
 ['pointerup','pointercancel','pointermove'].forEach(t => board.addEventListener(t, e => { if (lp && (t !== 'pointermove' || Math.abs(e.movementX) + Math.abs(e.movementY) > 4)) { clearTimeout(lp); lp = null; } }));
 document.addEventListener('pointerdown', e => { if (!menu.hidden && !menu.contains(e.target)) hideMenu(); });
-window.addEventListener('resize', hideMenu);
+let lastW = innerWidth; window.addEventListener('resize', () => { if (innerWidth !== lastW) { lastW = innerWidth; hideMenu(); } });
 window.addEventListener('pointermove', e => {
   if (!drag || e.pointerId !== drag.pid) return;
   if (!drag.active) {
     if (Math.hypot(e.clientX - drag.x, e.clientY - drag.y) < 6) return;
+    if (drag.touch && Math.abs(e.clientX - drag.x) > Math.abs(e.clientY - drag.y)) { endDrag(); return; }
     clearTimeout(drag.timer); drag.active = true; document.body.classList.add('dragging');
     ghost = drag.pill.cloneNode(true); ghost.classList.add('ghost'); ghost.classList.remove('on'); document.body.appendChild(ghost);
   }
