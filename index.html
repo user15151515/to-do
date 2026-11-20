@@ -1550,7 +1550,7 @@ function printHtml(f){
       ${p.note ? `<p class="pr-note">${esc(p.note)}</p>` : ''}
     </section>`;
   }).join('');
-  return `<header class="pr-head"><b>${s ? esc(s.name) : 'Semestre'}</b><span>${new Date().toLocaleDateString('es', { day:'numeric', month:'long', year:'numeric' })}</span></header><div class="pr-grid">${cards || '<p>No hay papeles.</p>'}</div>`;
+  return `<div class="pr-grid">${cards || '<p>No hay papeles.</p>'}</div>`;
 }
 function doPrint(f){ printing = true; $('#print').innerHTML = printHtml(f || S.filter); hideMenu(); $('#sheet').hidden = true; setTimeout(() => window.print(), 50); }
 window.addEventListener('beforeprint', () => { if (!printing) $('#print').innerHTML = printHtml(S.filter); });
