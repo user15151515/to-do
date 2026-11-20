@@ -82,7 +82,16 @@ body.sorting,body.sorting *{cursor:grabbing!important;user-select:none!important
 .paper.drop{box-shadow:0 0 0 2px var(--dc),var(--shadow);transform:translateY(-2px)}
 .paper.complete{opacity:.7}
 .paper.complete:hover,.paper.complete:focus-within{opacity:1}
-.p-grip{position:absolute;top:2px;left:50%;transform:translateX(-50%);color:var(--faint);cursor:grab;padding:3px 12px;opacity:0;transition:opacity .15s;touch-action:none}
+.p-grip{position:absolute;top:0;left:50%;transform:translateX(-50%);color:var(--faint);cursor:grab;padding:5px 22px 8px;opacity:0;transition:opacity .15s;touch-action:none}
+.p-grip:hover{color:var(--fg)}
+.p-head{cursor:grab}
+.p-head button,.p-head input,.p-head .when{cursor:pointer}
+.paper.pd-src{display:none}
+.pd-slot{border:1.5px dashed var(--faint);border-radius:6px;background:color-mix(in srgb,var(--paper) 40%,transparent);flex:none}
+.pd-float{position:fixed;left:0;top:0;z-index:95;pointer-events:none;background:var(--paper);border-radius:6px;box-shadow:var(--shadow),inset 3px 0 0 var(--c,var(--nosub));padding:12px 16px 14px 22px;display:flex;flex-direction:column;gap:2px;will-change:transform}
+.pd-sub{font-size:13px;font-weight:500;color:var(--c,var(--muted))}
+.pd-title{font-size:18px;font-weight:600;letter-spacing:-.015em}
+.pd-n{font-size:13px;color:var(--muted)}
 .paper:hover .p-grip{opacity:1}
 @media (hover:none){.p-grip{opacity:.6}}
 .p-head{display:flex;align-items:center;gap:2px;min-height:30px}
@@ -1012,16 +1021,90 @@ function dragOpts(extra){
 }
 function bindAll(){
   if (!window.Sortable) return;
-  board.querySelectorAll('.col').forEach(col => Sortable.create(col, dragOpts({ group:'papers', handle:'.p-grip', draggable:'.paper', onEnd(){
-    const multi = board.querySelectorAll('.col').length > 1, els = [...board.querySelectorAll('.col > .paper')];
-    if (els.some(el => !P(el.dataset.id)) || els.length !== visible().length) { render(); return; }
-    els.forEach(el => { if (multi) P(el.dataset.id).col = +el.parentElement.dataset.col; });
-    const ids = els.map(el => el.dataset.id), set = new Set(ids), slots = [];
-    S.papers.forEach((p, i) => set.has(p.id) && slots.push(i));
-    const moved = ids.map(P); slots.forEach((slot, k) => S.papers[slot] = moved[k]); save();
-  }})));
   board.querySelectorAll('.items').forEach(bindItems);
 }
+
+/* ---------- moving sheets: a light card follows the pointer and a slot shows where it will land;
+   the sheets themselves don't move until you drop, so nothing jumps or flickers ---------- */
+let pd = null;
+const PD_START = 6;
+function pdDown(e){
+  if (e.button > 0 || sorting) return;
+  const grip = e.target.closest('.p-grip'), head = e.target.closest('.p-head');
+  const onHeadGap = head && !e.target.closest('button, input, [contenteditable], .when, .chip');
+  if (!grip && !onHeadGap) return;
+  const paper = e.target.closest('.paper'); if (!paper || !P(paper.dataset.id)) return;
+  const touch = e.pointerType !== 'mouse';
+  if (touch && !grip) return;                         // on touch, only the grip moves a sheet (the rest scrolls)
+  pd = { id:paper.dataset.id, el:paper, x:e.clientX, y:e.clientY, pid:e.pointerId, active:false };
+  if (grip) e.preventDefault();
+}
+function pdStart(){
+  const el = pd.el, r = el.getBoundingClientRect(), p = P(pd.id), s = subj(p.subject);
+  sorting = true; document.body.classList.add('sorting'); hideMenu();
+  document.activeElement?.blur?.();
+  const fl = document.createElement('div');
+  fl.className = 'pd-float'; fl.style.width = r.width + 'px';
+  if (s) fl.style.setProperty('--c', s.color);
+  const { t, d } = stats(p);
+  fl.innerHTML = `${s ? `<span class="pd-sub">${esc(s.name)}</span>` : ''}<span class="pd-title">${esc(p.title.trim() || s?.name || 'Papel')}</span>${t ? `<span class="pd-n">${d}/${t}</span>` : ''}`;
+  document.body.appendChild(fl);
+  pd.dx = pd.x - r.left; pd.dy = Math.min(pd.y - r.top, 40);
+  const ph = document.createElement('div'); ph.className = 'pd-slot'; ph.style.height = Math.min(r.height, 120) + 'px';
+  el.after(ph); el.classList.add('pd-src');
+  pd.fl = fl; pd.ph = ph; pd.active = true;
+  pdMoveTo(pd.x, pd.y);
+}
+function pdMoveTo(x, y){
+  pd.lx = x; pd.ly = y;
+  pd.fl.style.transform = `translate(${x - pd.dx}px, ${y - pd.dy}px) rotate(.8deg)`;
+  const cols = [...board.querySelectorAll('.col')]; if (!cols.length) return;
+  let col = cols[0];
+  for (const c of cols) { const r = c.getBoundingClientRect(); if (x >= r.left - 11) col = c; }
+  const others = [...col.querySelectorAll(':scope > .paper:not(.pd-src)')];
+  let before = null;
+  for (const o of others) { const r = o.getBoundingClientRect(); if (y < r.top + r.height / 2) { before = o; break; } }
+  if (before) { if (pd.ph.nextElementSibling !== before || pd.ph.parentElement !== col) col.insertBefore(pd.ph, before); }
+  else if (pd.ph.parentElement !== col || pd.ph.nextElementSibling) col.appendChild(pd.ph);
+}
+function pdAutoScroll(){
+  if (!pd || !pd.active) return;
+  const edge = 70, y = pd.ly;
+  const v = y < edge ? -(edge - y) / 3 : y > innerHeight - edge ? (y - (innerHeight - edge)) / 3 : 0;
+  if (v) { scrollBy(0, v); pdMoveTo(pd.lx, pd.ly); }
+  requestAnimationFrame(pdAutoScroll);
+}
+function pdEnd(commit){
+  const d = pd; pd = null; if (!d) return;
+  sorting = false; lastSortEnd = Date.now(); document.body.classList.remove('sorting');
+  if (!d.active) return;
+  d.fl.remove();
+  if (commit) {
+    d.ph.replaceWith(d.el); d.el.classList.remove('pd-src');
+    const multi = board.querySelectorAll('.col').length > 1, els = [...board.querySelectorAll('.col > .paper')];
+    if (!els.some(el => !P(el.dataset.id)) && els.length === visible().length) {
+      els.forEach(el => { if (multi) P(el.dataset.id).col = +el.parentElement.dataset.col; });
+      const ids = els.map(el => el.dataset.id), set = new Set(ids), slots = [];
+      S.papers.forEach((p, i) => set.has(p.id) && slots.push(i));
+      const moved = ids.map(P); slots.forEach((slot, k) => S.papers[slot] = moved[k]);
+    }
+  }
+  render();
+  if (pendingRemote) applyRemote(pendingRemote);
+}
+board.addEventListener('pointerdown', pdDown);
+window.addEventListener('pointermove', e => {
+  if (!pd || e.pointerId !== pd.pid) return;
+  if (!pd.active) {
+    if (Math.hypot(e.clientX - pd.x, e.clientY - pd.y) < PD_START) return;
+    pdStart(); requestAnimationFrame(pdAutoScroll);
+  }
+  e.preventDefault();
+  if (!pd.raf) pd.raf = requestAnimationFrame(() => { if (pd) { pd.raf = 0; pdMoveTo(e.clientX, e.clientY); } });
+}, { passive:false });
+window.addEventListener('pointerup', e => { if (pd && e.pointerId === pd.pid) pdEnd(true); });
+window.addEventListener('pointercancel', e => { if (pd && e.pointerId === pd.pid) pdEnd(false); });
+window.addEventListener('keydown', e => { if (e.key === 'Escape' && pd?.active) { e.preventDefault(); pdEnd(false); } }, true);
 function bindItems(ul){
   if (!window.Sortable || !ul) return;
   Sortable.create(ul, dragOpts({ group:'items', handle:'.bullet', delay:140, delayOnTouchOnly:true, onEnd(ev){
