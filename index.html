@@ -127,6 +127,10 @@ body.sorting,body.sorting *{cursor:grabbing!important;user-select:none!important
 .blank{height:calc(var(--lh) * 2);cursor:text}
 .sortable-ghost{opacity:.3}
 .paper.sortable-chosen{box-shadow:var(--shadow)}
+.hidden-note{display:flex;justify-content:center;padding-top:18px}
+.hidden-note:empty{display:none}
+.hidden-note button{all:unset;cursor:pointer;font-size:14px;color:var(--muted);padding:6px 12px;border-radius:999px}
+.hidden-note button:hover{color:var(--fg);background:var(--hover)}
 .empty{all:unset;box-sizing:border-box;cursor:pointer;border:1.5px dashed var(--line);border-radius:6px;min-height:200px;display:grid;place-items:center;color:var(--faint);font-size:36px;font-weight:300}
 .empty:hover{color:var(--fg);border-color:var(--faint)}
 
@@ -405,6 +409,7 @@ ul.drop{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;ga
     <button class="round new" data-act="newPaper" aria-label="Nuevo papel"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M8 3v10M3 8h10"/></svg></button>
   </header>
   <main class="board" id="board"></main>
+  <div class="hidden-note" id="hiddenNote"></div>
 </div>
 <div id="sheet" hidden></div>
 <div id="toast" hidden></div>
@@ -758,7 +763,11 @@ const P = id => S.papers.find(p => p.id === id);
 const subj = id => S.subjects.find(s => s.id === id);
 const findItem = id => { for (const p of S.papers) { const i = p.items.findIndex(x => x.id === id); if (i > -1) return { p, i, it:p.items[i] }; } return {}; };
 const blockEnd = (items, i) => { let k = i + 1; while (k < items.length && items[k].lvl > items[i].lvl) k++; return k; };
-const visible = () => S.filter === 'all' ? S.papers : S.papers.filter(p => p.subject === S.filter).sort((a, b) => (a.title.trim() ? 1 : 0) - (b.title.trim() ? 1 : 0));
+/* a finished sheet can be hidden; it comes back by itself as soon as something in it is unchecked */
+const isDone = p => p.items.length > 0 && p.items.every(x => x.done);
+const isHidden = p => !!p.hidden && isDone(p);
+const hiddenIn = f => S.papers.filter(p => isHidden(p) && (f === 'all' || p.subject === f));
+const visible = () => (S.filter === 'all' ? S.papers : S.papers.filter(p => p.subject === S.filter).sort((a, b) => (a.title.trim() ? 1 : 0) - (b.title.trim() ? 1 : 0))).filter(p => !isHidden(p));
 
 let undoSnap = null, pendingFocus = null;
 const snap = () => {};
@@ -789,6 +798,7 @@ function sound(kind){
 const board = $('#board'), pills = $('#pills');
 function render(){
   if (S.filter !== 'all' && !subj(S.filter)) S.filter = 'all';
+  S.papers.forEach(p => { if (p.hidden && !isDone(p)) delete p.hidden; });
   renderPills();
   const ps = visible();
   if (!ps.length) board.innerHTML = `<button class="empty" data-act="newPaper" aria-label="Nuevo papel">+</button>`;
@@ -798,6 +808,8 @@ function render(){
     board.innerHTML = cols.map((c, k) => `<div class="col" data-col="${k}">${c.map(paperHtml).join('')}</div>`).join('');
   }
   lastCols = nCols();
+  const hn = hiddenIn(S.filter).length;
+  $('#hiddenNote').innerHTML = hn ? `<button data-act="showHidden" data-id="${S.filter}">${hn === 1 ? '1 papel oculto' : hn + ' papeles ocultos'} · Mostrar</button>` : '';
   bindAll(); save(); applyFocus();
   if (planId) renderPlanner();
 }
@@ -1043,6 +1055,7 @@ function toggle(id){
   if (p.hideDone && val) setTimeout(() => updatePaper(p.id), 650);
   const after = stats(p);
   sound(!val ? 'uncheck' : after.d === after.t && before.d !== before.t ? 'done' : 'check');
+  if (val && after.d === after.t && before.d !== before.t && !planId) toast('Ocultar este papel', () => { p.hidden = true; render(); }, 6000);
 }
 function setLevel(id, delta, cycle){
   const { p, i, it } = findItem(id); if (!it) return;
@@ -1463,6 +1476,8 @@ const A = {
   pDelete(id){ hideMenu(); snap(); S.papers = S.papers.filter(p => p.id !== id); render(); toast(); },
   pMenu(id, b){ const r = b.getBoundingClientRect(); paperMenu(id, r.left, r.bottom); },
   pDup(id){ hideMenu(); dupPaper(id); },
+  pHide(id){ hideMenu(); P(id).hidden = true; render(); toast(); },
+  showHidden(f){ hideMenu(); S.papers.forEach(p => { if (p.hidden && (f === 'all' || p.subject === f)) delete p.hidden; }); render(); },
   planOpen(id){ hideMenu(); openPlanner(id); },
   planToggle(id){ planSel(); S.planIds = S.planIds.includes(id) ? S.planIds.filter(x => x !== id) : [...S.planIds, id]; render(); },
   planClose(){ closePlanner(); },
@@ -1622,14 +1637,20 @@ pills.addEventListener('contextmenu', e => {
   const pill = e.target.closest('.pill[data-sid]'); if (!pill || pill.classList.contains('editing')) return;
   e.preventDefault(); endDrag(); openMenu(pill.dataset.sid, e.clientX, e.clientY);
 });
+pills.addEventListener('contextmenu', e => {
+  if (!e.target.closest('.pill[data-act="filter"]')) return;
+  e.preventDefault(); const hn = hiddenIn('all').length;
+  showMenu(hn ? `<button class="mi" data-act="showHidden" data-id="all">Mostrar todos los ocultos (${hn})</button>` : '<p class="rep-hint">No hay papeles ocultos.</p>', e.clientX, e.clientY);
+});
 const menu = $('#menu');
 function openMenu(sid, x, y){
-  showMenu(`<button class="mi" data-act="renameSubject" data-id="${sid}">Renombrar</button><button class="mi danger" data-act="delSubject" data-id="${sid}">Eliminar asignatura</button>`, x, y);
+  const hn = hiddenIn(sid).length;
+  showMenu(`${hn ? `<button class="mi" data-act="showHidden" data-id="${sid}">Mostrar ocultos (${hn})</button><div class="msep"></div>` : ''}<button class="mi" data-act="renameSubject" data-id="${sid}">Renombrar</button><button class="mi danger" data-act="delSubject" data-id="${sid}">Eliminar asignatura</button>`, x, y);
 }
 function paperMenu(id, x, y){
   const p = P(id), any = p.items.length, anyDone = p.items.some(x => x.done);
   const parents = p.items.some((x, i) => blockEnd(p.items, i) > i + 1), allFolded = parents && p.items.every((x, i) => blockEnd(p.items, i) === i + 1 || x.fold);
-  showMenu(`<button class="mi" data-act="planOpen" data-id="${id}">Repartir en calendario</button>
+  showMenu(`${isDone(p) ? `<button class="mi" data-act="pHide" data-id="${id}">Ocultar papel</button><div class="msep"></div>` : ''}<button class="mi" data-act="planOpen" data-id="${id}">Repartir en calendario</button>
     <div class="msep"></div>
     <button class="mi" data-act="pFold" data-id="${id}">${p.fold ? 'Desplegar papel' : 'Plegar papel'}</button>
     <button class="mi" data-act="pProgressM" data-id="${id}">${p.progress ? 'Quitar barra de progreso' : 'Mostrar barra de progreso'}</button>
