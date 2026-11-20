@@ -403,6 +403,38 @@ ul.drop{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;ga
   .cd{gap:2px;padding:7px 8px}
   .cd ul.drop{min-height:22px}
 }
+.p-note{outline:none;white-space:pre-wrap;overflow-wrap:anywhere;font-size:14px;line-height:1.45;color:var(--muted);border-radius:6px;padding:4px 6px;margin:2px -2px 8px;min-height:1.45em}
+.p-note:empty::before{content:attr(data-ph);color:var(--faint);opacity:0;transition:opacity .15s}
+.paper:hover .p-note:empty::before,.p-note:focus:empty::before{opacity:1}
+@media (hover:none){.p-note:empty::before{opacity:.7}}
+.p-note:focus{background:var(--hover);color:var(--fg)}
+.p-note.has{border-left:2px solid var(--line);border-radius:0 6px 6px 0;padding-left:9px}
+.paper.folded .p-note{display:none}
+#print{display:none}
+@media print{
+  @page{size:A4;margin:8mm}
+  html,body{background:#fff!important;padding:0!important;margin:0!important;color:#111}
+  body>*:not(#print){display:none!important}
+  #print{display:block!important;font-family:var(--ui);-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  .pr-head{display:flex;justify-content:space-between;font-size:9pt;color:#777;margin:0 1mm 3mm}
+  .pr-head b{color:#111;font-weight:600}
+  .pr-grid{column-count:2;column-gap:4mm}
+  .pr-card{break-inside:avoid;display:block;border:.35mm dashed #a8a8a8;border-radius:2.5mm;padding:3.6mm 4mm 3.4mm 6.4mm;margin:0 0 4mm;position:relative}
+  .pr-card.long{break-inside:auto}
+  .pr-card::before{content:"";position:absolute;left:2.4mm;top:3.6mm;bottom:3.4mm;width:.9mm;border-radius:1mm;background:var(--c)}
+  .pr-meta{display:flex;justify-content:space-between;gap:3mm;font-size:8pt;color:#666}
+  .pr-meta b{color:var(--c);font-weight:600}
+  .pr-card h2{font-size:12.5pt;line-height:1.2;font-weight:650;margin:.8mm 0 2mm;letter-spacing:-.01em}
+  .pr-card ul{list-style:none;margin:0;padding:0}
+  .pr-card li{display:flex;gap:2mm;align-items:flex-start;font-size:9.6pt;line-height:1.3;padding:.9mm 0 .9mm calc(var(--l) * 4.5mm);border-bottom:.2mm solid #e6e6e6;break-inside:avoid}
+  .pr-card li:last-child{border-bottom:0}
+  .pr-card li i{flex:none;width:3.2mm;height:3.2mm;margin-top:.3mm;border:.3mm solid #777;border-radius:.7mm;font-style:normal;font-size:7pt;line-height:3.2mm;text-align:center;color:#fff}
+  .pr-card li.done i{background:#888;border-color:#888}
+  .pr-card li.done span{color:#999;text-decoration:line-through}
+  .pr-card li em{font-style:normal;color:#888;font-size:8pt}
+  .pr-blank{height:14mm;background:repeating-linear-gradient(to bottom,transparent 0 6.5mm,#e6e6e6 6.5mm 6.7mm)}
+  .pr-note{margin:2mm 0 0;padding-left:2.4mm;border-left:.5mm solid #ccc;font-size:8.6pt;line-height:1.35;color:#444;white-space:pre-wrap}
+}
 @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
 </style>
 
@@ -423,6 +455,7 @@ ul.drop{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;ga
 <div id="sheet" hidden></div>
 <div id="toast" hidden></div>
 <div id="syncbar" hidden></div>
+<div id="print" aria-hidden="true"></div>
 <div id="menu" hidden></div>
 <div id="planner" hidden></div>
 
@@ -608,6 +641,7 @@ function applyMap(m){
   S.subjects = m.subjects ? JSON.parse(m.subjects) : []; S.papers = papers;
   if (keep) {
     if (keep.kind === 'title') { const p = P(keep.id); if (p) p.title = keep.text; }
+    else if (keep.kind === 'note') { const p = P(keep.id); if (p) p.note = keep.text; }
     else { const f = findItem(keep.id); if (f.it) f.it.t = keep.text; }
   }
   lastData = dataStr(); undoStack = []; redoStack = [];
@@ -967,6 +1001,7 @@ function paperHtml(p){
       <ul class="items" data-p="${p.id}">${shown.map(o => itemHtml(o.x, o.sub)).join('')}</ul>
       <div class="blank" data-act="addHere" data-id="${p.id}"></div>
     </div>
+    <div class="p-note ${p.note ? 'has' : ''}" contenteditable="plaintext-only" spellcheck="false" data-edit="note" data-id="${p.id}" data-ph="Añadir nota…">${esc(p.note || '')}</div>
     ${hiddenDone ? `<button class="donebar" data-act="pHideDone" data-id="${p.id}">${hiddenDone === 1 ? '1 hecha' : hiddenDone + ' hechas'}</button>` : ''}`}
   </article>`;
 }
@@ -1268,6 +1303,7 @@ function openSheet(tab){
   if (tab) sheetTab = tab;
   const body = sheetTab === 'sync' ? syncTabHtml() : sheetTab === 'notif' ? (canSync ? notifHtml() : '<p class="note">Las notificaciones funcionan en la versión publicada en GitHub Pages.</p>') : sheetTab === 'adv' ? advTabHtml()
     : `<section class="sec"><button class="switch ${S.sound?'on':''}" data-act="toggleSound"><b></b>Sonido al marcar</button></section>
+       <section class="sec"><h3>Imprimir</h3><p class="note small">Los papeles en un A4, como tarjetas para recortar.</p><div class="row"><button class="btn ghostb" data-act="print" data-id="${S.filter}">${S.filter === 'all' ? 'Imprimir todo' : 'Imprimir ' + esc(subj(S.filter)?.name || '')}</button>${S.filter !== 'all' ? '<button class="btn ghostb" data-act="print" data-id="all">Imprimir todo</button>' : ''}</div></section>
        <section class="sec keys-link"><button class="btn ghostb" data-act="keys">Ver atajos de teclado</button></section>`;
   const tabs = `<nav class="tabs" role="tablist">${TABS.map(([k, l]) => `<button role="tab" aria-selected="${k === sheetTab}" class="${k === sheetTab ? 'on' : ''}" data-act="tab" data-t="${k}">${l}</button>`).join('')}</nav>`;
   const sh = $('#sheet');
@@ -1499,6 +1535,27 @@ function remHtml(k, id){
 }
 function remRefresh(k, id){ const pid = remPaperId(k, id); if (pid) updatePaper(pid); menu.innerHTML = remHtml(k, id); }
 
+/* ---------- printing: the sheets of the current view (or one subject) as cut-out cards on A4 ---------- */
+let printing = false;
+function printHtml(f){
+  const ps = (f === 'all' ? S.papers : S.papers.filter(p => p.subject === f)).filter(p => !isHidden(p));
+  const s = f !== 'all' ? subj(f) : null;
+  const cards = ps.map(p => {
+    const sj = subj(p.subject), its = p.items;
+    const size = its.length + (p.note ? Math.ceil(p.note.length / 45) + 1 : 0);
+    return `<section class="pr-card ${size > 26 ? 'long' : ''}" style="--c:${sj?.color || '#9aa0a6'}">
+      <div class="pr-meta">${sj ? `<b>${esc(sj.name)}</b>` : ''}${p.date ? `<span>${fmtLong(p.date)}</span>` : ''}</div>
+      <h2>${esc(p.title.trim() || sj?.name || 'Papel')}</h2>
+      ${its.length ? `<ul>${its.map(x => `<li class="${x.done ? 'done' : ''}" style="--l:${x.lvl}"><i>${x.done ? '✓' : ''}</i><span>${esc(x.t)}${x.date ? ` <em>${shortDate(x.date)}</em>` : ''}${x.repeat ? ' <em>↻</em>' : ''}</span></li>`).join('')}</ul>` : '<div class="pr-blank"></div>'}
+      ${p.note ? `<p class="pr-note">${esc(p.note)}</p>` : ''}
+    </section>`;
+  }).join('');
+  return `<header class="pr-head"><b>${s ? esc(s.name) : 'Semestre'}</b><span>${new Date().toLocaleDateString('es', { day:'numeric', month:'long', year:'numeric' })}</span></header><div class="pr-grid">${cards || '<p>No hay papeles.</p>'}</div>`;
+}
+function doPrint(f){ printing = true; $('#print').innerHTML = printHtml(f || S.filter); hideMenu(); $('#sheet').hidden = true; setTimeout(() => window.print(), 50); }
+window.addEventListener('beforeprint', () => { if (!printing) $('#print').innerHTML = printHtml(S.filter); });
+window.addEventListener('afterprint', () => { printing = false; $('#print').innerHTML = ''; });
+
 /* ---------- keyboard shortcuts sheet ---------- */
 function openKeys(){
   const mac = /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent), M = mac ? '⌘' : 'Ctrl', K = x => `<kbd>${x}</kbd>`;
@@ -1507,6 +1564,7 @@ function openKeys(){
       [K('N'), 'Papel nuevo'],
       [K('C'), 'Abrir o cerrar el calendario'],
       [K(M) + K('Z'), 'Deshacer'],
+      [K(M) + K('P'), 'Imprimir lo que ves (todos o la asignatura filtrada)'],
       [K(M) + K('⇧') + K('Z'), 'Rehacer (también ' + K(M) + K('Y') + ')'],
       [K('Esc'), 'Cerrar menús, ajustes o calendario; dejar de editar'],
       [K('?'), 'Ver estos atajos'],
@@ -1559,6 +1617,7 @@ const A = {
   pDelete(id){ hideMenu(); snap(); S.papers = S.papers.filter(p => p.id !== id); render(); toast(); },
   pMenu(id, b){ const r = b.getBoundingClientRect(); paperMenu(id, r.left, r.bottom); },
   pDup(id){ hideMenu(); dupPaper(id); },
+  print(f){ doPrint(f); },
   pHide(id){ hideMenu(); P(id).hidden = true; render(); toast(); },
   showHidden(f){ hideMenu(); S.papers.forEach(p => { if (p.hidden && (f === 'all' || p.subject === f)) delete p.hidden; }); render(); },
   planOpen(id){ hideMenu(); openPlanner(id); },
@@ -1723,12 +1782,12 @@ pills.addEventListener('contextmenu', e => {
 pills.addEventListener('contextmenu', e => {
   if (!e.target.closest('.pill[data-act="filter"]')) return;
   e.preventDefault(); const hn = hiddenIn('all').length;
-  showMenu(hn ? `<button class="mi" data-act="showHidden" data-id="all">Mostrar todos los ocultos (${hn})</button>` : '<p class="rep-hint">No hay papeles ocultos.</p>', e.clientX, e.clientY);
+  showMenu(`<button class="mi" data-act="print" data-id="all">Imprimir todo</button>${hn ? `<button class="mi" data-act="showHidden" data-id="all">Mostrar todos los ocultos (${hn})</button>` : ''}`, e.clientX, e.clientY);
 });
 const menu = $('#menu');
 function openMenu(sid, x, y){
   const hn = hiddenIn(sid).length;
-  showMenu(`${hn ? `<button class="mi" data-act="showHidden" data-id="${sid}">Mostrar ocultos (${hn})</button><div class="msep"></div>` : ''}<button class="mi" data-act="renameSubject" data-id="${sid}">Renombrar</button><button class="mi danger" data-act="delSubject" data-id="${sid}">Eliminar asignatura</button>`, x, y);
+  showMenu(`<button class="mi" data-act="print" data-id="${sid}">Imprimir</button>${hn ? `<button class="mi" data-act="showHidden" data-id="${sid}">Mostrar ocultos (${hn})</button>` : ''}<div class="msep"></div><button class="mi" data-act="renameSubject" data-id="${sid}">Renombrar</button><button class="mi danger" data-act="delSubject" data-id="${sid}">Eliminar asignatura</button>`, x, y);
 }
 function paperMenu(id, x, y){
   const p = P(id), any = p.items.length, anyDone = p.items.some(x => x.done);
@@ -1870,6 +1929,7 @@ board.addEventListener('pointercancel', () => sw = null);
 /* ---------- typing ---------- */
 document.addEventListener('input', e => {
   const el = e.target.closest?.('[data-edit]'); if (!el) return;
+  if (el.dataset.edit === 'note') { const p = P(el.dataset.id); if (p) { p.note = el.innerText.replace(/\n$/, ''); el.classList.add('has'); } save(); return; }
   const v = el.textContent.replace(/\n/g,' ');
   if (el.dataset.edit === 'title') P(el.dataset.id).title = v; else { const r = findItem(el.dataset.id); if (r.it) r.it.t = v; }
   save();
@@ -1893,6 +1953,8 @@ document.addEventListener('focusout', e => {
     } else { const r = findItem(id); if (r.it) { r.it.t = v; save(); } commitLine(id, v); }
   } else if (el.matches?.('[data-edit="title"]')) {
     const p = P(el.dataset.id); if (p) { p.title = el.textContent.replace(/\s+/g,' ').trim(); if (!p.title) el.textContent = ''; save(); }
+  } else if (el.matches?.('[data-edit="note"]')) {
+    const p = P(el.dataset.id); if (p) { const v = el.innerText.replace(/[ \t]+\n/g, '\n').trim(); if (v) p.note = v; else { delete p.note; el.textContent = ''; el.classList.remove('has'); } save(); }
   }
 });
 document.addEventListener('keydown', e => {
@@ -1960,7 +2022,7 @@ document.addEventListener('paste', e => {
     if (!it.t.trim()) p.items.splice(i, 1, ...lines); else p.items.splice(i + 1, 0, ...lines);
     pendingFocus = { sel:`[data-edit="item"][data-id="${lines[lines.length-1].id}"]`, caret:'end' }; updatePaper(p.id); return;
   }
-  document.execCommand('insertText', false, text.replace(/\s*\n\s*/g,' '));
+  document.execCommand('insertText', false, el.dataset.edit === 'note' ? text : text.replace(/\s*\n\s*/g,' '));
 });
 
 window.__sem = { get S(){ return S; }, code:() => syncCode, render:() => render(), encryptCode, registerBoard, dev:DEV, doc:() => docRef }; // handle for automated tests
