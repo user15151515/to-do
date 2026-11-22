@@ -414,9 +414,9 @@ ul.drop{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;ga
 #print{display:none}
 .pr-measure{position:fixed;left:-10000px;top:0;visibility:hidden;pointer-events:none}
 #print,.pr-measure{font-family:var(--ui);color:#111;-webkit-print-color-adjust:exact;print-color-adjust:exact}
-.pr-page{position:relative;width:186mm;height:271mm;overflow:hidden;break-after:page;page-break-after:always}
+.pr-page{position:relative;width:210mm;height:296mm;overflow:hidden;break-after:page;page-break-after:always}
 .pr-page:last-child{break-after:auto;page-break-after:auto}
-.pr-pos{position:absolute}
+.pr-pos{position:absolute;margin:13mm 0 0 12mm}
 .pr-card{--k:1;box-sizing:border-box;width:91mm;background:#fff;border:.35mm dashed #a8a8a8;border-radius:2.5mm;padding:3.6mm 4mm 3.4mm 6.4mm;position:relative}
 .pr-card.wide{width:186mm}
 .pr-card::before{content:"";position:absolute;left:2.4mm;top:3.6mm;bottom:3.4mm;width:.9mm;border-radius:1mm;background:var(--c)}
@@ -434,7 +434,7 @@ ul.drop{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;ga
 .pr-blank{height:14mm;background:repeating-linear-gradient(to bottom,transparent 0 6.5mm,#e6e6e6 6.5mm 6.7mm)}
 .pr-note{margin:2mm 0 0;padding-left:2.4mm;border-left:.5mm solid #ccc;font-size:calc(8.6pt * var(--k));line-height:1.35;color:#444;white-space:pre-wrap}
 @media print{
-  @page{size:A4;margin:13mm 12mm 12mm}
+  @page{size:A4;margin:0}
   html,body{background:#fff!important;padding:0!important;margin:0!important;color:#111}
   body>*:not(#print){display:none!important}
   #print{display:block!important}
