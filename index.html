@@ -414,11 +414,11 @@ ul.drop{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;ga
 #print{display:none}
 .pr-measure{position:fixed;left:-10000px;top:0;visibility:hidden;pointer-events:none}
 #print,.pr-measure{font-family:var(--ui);color:#111;-webkit-print-color-adjust:exact;print-color-adjust:exact}
-.pr-page{position:relative;width:194mm;height:280mm;overflow:hidden;break-after:page;page-break-after:always}
+.pr-page{position:relative;width:186mm;height:271mm;overflow:hidden;break-after:page;page-break-after:always}
 .pr-page:last-child{break-after:auto;page-break-after:auto}
 .pr-pos{position:absolute}
-.pr-card{--k:1;box-sizing:border-box;width:95mm;background:#fff;border:.35mm dashed #a8a8a8;border-radius:2.5mm;padding:3.6mm 4mm 3.4mm 6.4mm;position:relative}
-.pr-card.wide{width:194mm}
+.pr-card{--k:1;box-sizing:border-box;width:91mm;background:#fff;border:.35mm dashed #a8a8a8;border-radius:2.5mm;padding:3.6mm 4mm 3.4mm 6.4mm;position:relative}
+.pr-card.wide{width:186mm}
 .pr-card::before{content:"";position:absolute;left:2.4mm;top:3.6mm;bottom:3.4mm;width:.9mm;border-radius:1mm;background:var(--c)}
 .pr-meta{display:flex;justify-content:space-between;gap:3mm;font-size:calc(8pt * var(--k));color:#666}
 .pr-meta b{color:var(--c);font-weight:600}
@@ -434,7 +434,7 @@ ul.drop{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;ga
 .pr-blank{height:14mm;background:repeating-linear-gradient(to bottom,transparent 0 6.5mm,#e6e6e6 6.5mm 6.7mm)}
 .pr-note{margin:2mm 0 0;padding-left:2.4mm;border-left:.5mm solid #ccc;font-size:calc(8.6pt * var(--k));line-height:1.35;color:#444;white-space:pre-wrap}
 @media print{
-  @page{size:A4;margin:8mm}
+  @page{size:A4;margin:13mm 12mm 12mm}
   html,body{background:#fff!important;padding:0!important;margin:0!important;color:#111}
   body>*:not(#print){display:none!important}
   #print{display:block!important}
@@ -1557,14 +1557,14 @@ function cardHtml(p){
     ${p.note ? `<p class="pr-note">${esc(p.note)}</p>` : ''}
   </section>`;
 }
-/* lays the cards out on A4 pages (two columns of 95 mm, 280 mm high): a card that doesn't fit a column
+/* lays the cards out on A4 pages (two columns of 91 mm, 271 mm high, 12–13 mm margins): a card that doesn't fit a column
    takes the whole width with its lines in two columns; one that doesn't fit a page is printed smaller */
 function printPages(f){
   const ps = (f === 'all' ? S.papers : S.papers.filter(p => p.subject === f)).filter(p => !isHidden(p));
   if (!ps.length) return '<div class="pr-page"><p>No hay papeles.</p></div>';
   const box = document.createElement('div'); box.className = 'pr-measure'; document.documentElement.appendChild(box);   // outside <body>: measurable also while printing
   const ruler = document.createElement('div'); ruler.style.width = '100mm'; box.appendChild(ruler);
-  const mm = ruler.getBoundingClientRect().width / 100 || 3.7795, PH = 280, CW = 95, GAP = 4, W = 194;
+  const mm = ruler.getBoundingClientRect().width / 100 || 3.7795, PH = 271, CW = 91, GAP = 4, W = 186;
   // measure every card narrow (one column) and wide (whole width, lines in two columns) at text scale k
   const measure = k => ps.map(p => {
     box.insertAdjacentHTML('beforeend', cardHtml(p));
