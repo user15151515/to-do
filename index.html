@@ -1285,6 +1285,11 @@ function syncTabHtml(){
     <section class="sec">
       <h3>Unir este dispositivo a otra mesa</h3>
       <div class="row nowrap"><input class="link-in" id="linkIn" placeholder="Pega el enlace o el código" autocomplete="off"><button class="btn ghostb" data-act="linkDevice">Vincular</button></div>
+    </section>
+    <section class="sec">
+      <h3>eCampus</h3>
+      <p class="note small">Para apuntar desde eCampus: pega este código en la pestaña "Apuntar en Semestre" del script.</p>
+      <div class="row"><button class="btn ghostb" data-act="copyCode">Copiar código para eCampus</button></div>
     </section>`;
 }
 function advTabHtml(){
@@ -1591,6 +1596,7 @@ function openKeys(){
     ['Con el ratón', [
       ['Clic derecho en una línea', 'Duplicar, copiar, pegar, fecha, repetir, eliminar…'],
       ['Clic derecho en un papel', 'Plegar, ocultar hechas, repartir, vaciar…'],
+      ['Doble clic en una línea de eCampus', 'Abrir ese archivo, test o unidad en eCampus'],
       ['Clic en la flecha', 'Plegar o desplegar (si tiene subtareas); si no, meterla un nivel'],
     ]],
   ];
@@ -1713,6 +1719,8 @@ const A = {
     if (!m) { $('#linkIn').value = ''; $('#linkIn').placeholder = 'Ese código no es válido'; return; }
     useCode(m[1].toLowerCase()); $('#sheet').hidden = true;
   },
+  copyCode(_, b){ try { navigator.clipboard.writeText(syncCode).then(() => b.textContent = 'Copiado', () => b.textContent = syncCode); } catch(e){ b.textContent = syncCode; } },
+  openUrl(id){ hideMenu(); const it = findItem(id).it || P(id); if (it?.url) window.open(it.url, '_blank', 'noopener'); },
   copyLink(_, b){ try { navigator.clipboard.writeText(linkUrl()).then(() => b.textContent = 'Copiado', () => b.textContent = linkUrl()); } catch(e){ b.textContent = linkUrl(); } },
   copyBk(_, b){
     const ta = $('#bk'); const ok = () => b.textContent = 'Copiado', fb = () => { ta.focus(); ta.select(); };
@@ -1792,7 +1800,7 @@ function openMenu(sid, x, y){
 function paperMenu(id, x, y){
   const p = P(id), any = p.items.length, anyDone = p.items.some(x => x.done);
   const parents = p.items.some((x, i) => blockEnd(p.items, i) > i + 1), allFolded = parents && p.items.every((x, i) => blockEnd(p.items, i) === i + 1 || x.fold);
-  showMenu(`${isDone(p) ? `<button class="mi" data-act="pHide" data-id="${id}">Ocultar papel</button><div class="msep"></div>` : ''}<button class="mi" data-act="planOpen" data-id="${id}">Repartir en calendario</button>
+  showMenu(`${p.url ? `<button class="mi" data-act="openUrl" data-id="${id}">Abrir asignatura en eCampus</button><div class="msep"></div>` : ''}${isDone(p) ? `<button class="mi" data-act="pHide" data-id="${id}">Ocultar papel</button><div class="msep"></div>` : ''}<button class="mi" data-act="planOpen" data-id="${id}">Repartir en calendario</button>
     <div class="msep"></div>
     <button class="mi" data-act="pFold" data-id="${id}">${p.fold ? 'Desplegar papel' : 'Plegar papel'}</button>
     <button class="mi" data-act="pProgressM" data-id="${id}">${p.progress ? 'Quitar barra de progreso' : 'Mostrar barra de progreso'}</button>
@@ -1823,7 +1831,7 @@ function itemMenu(id, x, y){
   const e = blockEnd(p.items, i), hasSubs = e > i + 1, nt = bump(it.t);
   let sibs = 0;
   if (hasSubs) { let ps = 0, pe = p.items.length; for (let k = i - 1; k >= 0; k--) if (p.items[k].lvl < it.lvl) { ps = k + 1; pe = blockEnd(p.items, k); break; } for (let k = ps; k < pe; k++) if (p.items[k].lvl === it.lvl && k !== i) sibs++; }
-  showMenu(`<button class="mi" data-act="iDup" data-id="${id}">Duplicar${nt !== it.t ? ` como “${esc(nt)}”` : ''}</button>
+  showMenu(`${it.url ? `<button class="mi" data-act="openUrl" data-id="${id}">Abrir en eCampus</button><div class="msep"></div>` : ''}<button class="mi" data-act="iDup" data-id="${id}">Duplicar${nt !== it.t ? ` como “${esc(nt)}”` : ''}</button>
     <button class="mi" data-act="iCopy" data-id="${id}">Copiar${hasSubs ? ' con sus subtareas' : ''}</button>
     ${clip ? `<button class="mi" data-act="iPasteBelow" data-id="${id}">Pegar debajo</button>${it.lvl < MAXLVL ? `<button class="mi" data-act="iPasteIn" data-id="${id}">Pegar dentro</button>` : ''}` : ''}
     ${hasSubs && sibs ? `<button class="mi" data-act="iSubs" data-id="${id}">Poner sus subtareas en las otras ${sibs}</button>` : ''}
@@ -1844,6 +1852,13 @@ function showMenu(html, x, y){
   menu.style.top = Math.max(12, Math.min(y + 4, innerHeight - menu.offsetHeight - 12)) + 'px';
 }
 function hideMenu(){ menu.hidden = true; menu.innerHTML = ''; }
+// double click on a line that comes from eCampus opens it there
+board.addEventListener('dblclick', e => {
+  const t = e.target.closest('.it-text'); if (!t) return;
+  const it = findItem(t.dataset.id).it; if (!it?.url) return;
+  e.preventDefault(); getSelection()?.removeAllRanges(); t.blur();
+  window.open(it.url, '_blank', 'noopener');
+});
 board.addEventListener('contextmenu', e => {
   const li = e.target.closest('.it'), pp = e.target.closest('.paper'); if (!pp) return;
   e.preventDefault();
