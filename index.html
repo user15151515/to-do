@@ -410,30 +410,34 @@ ul.drop{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;ga
 .p-note:focus{background:var(--hover);color:var(--fg)}
 .p-note.has{border-left:2px solid var(--line);border-radius:0 6px 6px 0;padding-left:9px}
 .paper.folded .p-note{display:none}
+/* print: cards are measured and placed on A4 pages by script, so a sheet is never split */
 #print{display:none}
+.pr-measure{position:fixed;left:-10000px;top:0;visibility:hidden;pointer-events:none}
+#print,.pr-measure{font-family:var(--ui);color:#111;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+.pr-page{position:relative;width:194mm;height:280mm;overflow:hidden;break-after:page;page-break-after:always}
+.pr-page:last-child{break-after:auto;page-break-after:auto}
+.pr-pos{position:absolute}
+.pr-card{--k:1;box-sizing:border-box;width:95mm;background:#fff;border:.35mm dashed #a8a8a8;border-radius:2.5mm;padding:3.6mm 4mm 3.4mm 6.4mm;position:relative}
+.pr-card.wide{width:194mm}
+.pr-card::before{content:"";position:absolute;left:2.4mm;top:3.6mm;bottom:3.4mm;width:.9mm;border-radius:1mm;background:var(--c)}
+.pr-meta{display:flex;justify-content:space-between;gap:3mm;font-size:calc(8pt * var(--k));color:#666}
+.pr-meta b{color:var(--c);font-weight:600}
+.pr-card h2{font-size:calc(12.5pt * var(--k));line-height:1.2;font-weight:650;margin:.8mm 0 2mm;letter-spacing:-.01em;color:#111}
+.pr-items{display:block}
+.pr-card.wide .pr-items{column-count:2;column-gap:7mm;column-rule:.2mm solid #eee}
+.pr-blk{break-inside:avoid;page-break-inside:avoid}
+.pr-card .pr-li{display:flex;gap:2mm;align-items:flex-start;font-size:calc(9.6pt * var(--k));line-height:1.3;padding:calc(.9mm * var(--k)) 0 calc(.9mm * var(--k)) calc(var(--l) * 4.5mm);border-bottom:.2mm solid #e6e6e6;break-inside:avoid}
+.pr-card .pr-li i{flex:none;width:calc(3.2mm * var(--k));height:calc(3.2mm * var(--k));margin-top:.3mm;border:.3mm solid #777;border-radius:.7mm;font-style:normal;font-size:calc(7pt * var(--k));line-height:calc(3.2mm * var(--k));text-align:center;color:#fff}
+.pr-card .pr-li.done i{background:#888;border-color:#888}
+.pr-card .pr-li.done span{color:#999;text-decoration:line-through}
+.pr-card .pr-li em{font-style:normal;color:#888;font-size:calc(8pt * var(--k))}
+.pr-blank{height:14mm;background:repeating-linear-gradient(to bottom,transparent 0 6.5mm,#e6e6e6 6.5mm 6.7mm)}
+.pr-note{margin:2mm 0 0;padding-left:2.4mm;border-left:.5mm solid #ccc;font-size:calc(8.6pt * var(--k));line-height:1.35;color:#444;white-space:pre-wrap}
 @media print{
   @page{size:A4;margin:8mm}
   html,body{background:#fff!important;padding:0!important;margin:0!important;color:#111}
   body>*:not(#print){display:none!important}
-  #print{display:block!important;font-family:var(--ui);-webkit-print-color-adjust:exact;print-color-adjust:exact}
-  .pr-head{display:flex;justify-content:space-between;font-size:9pt;color:#777;margin:0 1mm 3mm}
-  .pr-head b{color:#111;font-weight:600}
-  .pr-grid{column-count:2;column-gap:4mm}
-  .pr-card{break-inside:avoid;display:block;border:.35mm dashed #a8a8a8;border-radius:2.5mm;padding:3.6mm 4mm 3.4mm 6.4mm;margin:0 0 4mm;position:relative}
-  .pr-card.long{break-inside:auto}
-  .pr-card::before{content:"";position:absolute;left:2.4mm;top:3.6mm;bottom:3.4mm;width:.9mm;border-radius:1mm;background:var(--c)}
-  .pr-meta{display:flex;justify-content:space-between;gap:3mm;font-size:8pt;color:#666}
-  .pr-meta b{color:var(--c);font-weight:600}
-  .pr-card h2{font-size:12.5pt;line-height:1.2;font-weight:650;margin:.8mm 0 2mm;letter-spacing:-.01em}
-  .pr-card ul{list-style:none;margin:0;padding:0}
-  .pr-card li{display:flex;gap:2mm;align-items:flex-start;font-size:9.6pt;line-height:1.3;padding:.9mm 0 .9mm calc(var(--l) * 4.5mm);border-bottom:.2mm solid #e6e6e6;break-inside:avoid}
-  .pr-card li:last-child{border-bottom:0}
-  .pr-card li i{flex:none;width:3.2mm;height:3.2mm;margin-top:.3mm;border:.3mm solid #777;border-radius:.7mm;font-style:normal;font-size:7pt;line-height:3.2mm;text-align:center;color:#fff}
-  .pr-card li.done i{background:#888;border-color:#888}
-  .pr-card li.done span{color:#999;text-decoration:line-through}
-  .pr-card li em{font-style:normal;color:#888;font-size:8pt}
-  .pr-blank{height:14mm;background:repeating-linear-gradient(to bottom,transparent 0 6.5mm,#e6e6e6 6.5mm 6.7mm)}
-  .pr-note{margin:2mm 0 0;padding-left:2.4mm;border-left:.5mm solid #ccc;font-size:8.6pt;line-height:1.35;color:#444;white-space:pre-wrap}
+  #print{display:block!important}
 }
 @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
 </style>
@@ -1542,23 +1546,59 @@ function remRefresh(k, id){ const pid = remPaperId(k, id); if (pid) updatePaper(
 
 /* ---------- printing: the sheets of the current view (or one subject) as cut-out cards on A4 ---------- */
 let printing = false;
-function printHtml(f){
-  const ps = (f === 'all' ? S.papers : S.papers.filter(p => p.subject === f)).filter(p => !isHidden(p));
-  const s = f !== 'all' ? subj(f) : null;
-  const cards = ps.map(p => {
-    const sj = subj(p.subject), its = p.items;
-    const size = its.length + (p.note ? Math.ceil(p.note.length / 45) + 1 : 0);
-    return `<section class="pr-card ${size > 26 ? 'long' : ''}" style="--c:${sj?.color || '#9aa0a6'}">
-      <div class="pr-meta">${sj ? `<b>${esc(sj.name)}</b>` : ''}${p.date ? `<span>${fmtLong(p.date)}</span>` : ''}</div>
-      <h2>${esc(p.title.trim() || sj?.name || 'Papel')}</h2>
-      ${its.length ? `<ul>${its.map(x => `<li class="${x.done ? 'done' : ''}" style="--l:${x.lvl}"><i>${x.done ? '✓' : ''}</i><span>${esc(x.t)}${x.date ? ` <em>${shortDate(x.date)}</em>` : ''}${x.repeat ? ' <em>↻</em>' : ''}</span></li>`).join('')}</ul>` : '<div class="pr-blank"></div>'}
-      ${p.note ? `<p class="pr-note">${esc(p.note)}</p>` : ''}
-    </section>`;
-  }).join('');
-  return `<div class="pr-grid">${cards || '<p>No hay papeles.</p>'}</div>`;
+function cardHtml(p){
+  const sj = subj(p.subject), its = p.items;
+  const li = x => `<div class="pr-li ${x.done ? 'done' : ''}" style="--l:${x.lvl}"><i>${x.done ? '✓' : ''}</i><span>${esc(x.t)}${x.date ? ` <em>${shortDate(x.date)}</em>` : ''}${x.repeat ? ' <em>↻</em>' : ''}</span></div>`;
+  const blocks = []; its.forEach(x => { if (!x.lvl || !blocks.length) blocks.push([]); blocks[blocks.length - 1].push(x); });
+  return `<section class="pr-card" style="--c:${sj?.color || '#9aa0a6'}">
+    <div class="pr-meta">${sj ? `<b>${esc(sj.name)}</b>` : ''}${p.date ? `<span>${fmtLong(p.date)}</span>` : ''}</div>
+    <h2>${esc(p.title.trim() || sj?.name || 'Papel')}</h2>
+    ${its.length ? `<div class="pr-items">${blocks.map(b => `<div class="pr-blk">${b.map(li).join('')}</div>`).join('')}</div>` : '<div class="pr-blank"></div>'}
+    ${p.note ? `<p class="pr-note">${esc(p.note)}</p>` : ''}
+  </section>`;
 }
-function doPrint(f){ printing = true; $('#print').innerHTML = printHtml(f || S.filter); hideMenu(); $('#sheet').hidden = true; setTimeout(() => window.print(), 50); }
-window.addEventListener('beforeprint', () => { if (!printing) $('#print').innerHTML = printHtml(S.filter); });
+/* lays the cards out on A4 pages (two columns of 95 mm, 280 mm high): a card that doesn't fit a column
+   takes the whole width with its lines in two columns; one that doesn't fit a page is printed smaller */
+function printPages(f){
+  const ps = (f === 'all' ? S.papers : S.papers.filter(p => p.subject === f)).filter(p => !isHidden(p));
+  if (!ps.length) return '<div class="pr-page"><p>No hay papeles.</p></div>';
+  const box = document.createElement('div'); box.className = 'pr-measure'; document.documentElement.appendChild(box);   // outside <body>: measurable also while printing
+  const ruler = document.createElement('div'); ruler.style.width = '100mm'; box.appendChild(ruler);
+  const mm = ruler.getBoundingClientRect().width / 100 || 3.7795, PH = 280, CW = 95, GAP = 4, W = 194;
+  // measure every card narrow (one column) and wide (whole width, lines in two columns) at text scale k
+  const measure = k => ps.map(p => {
+    box.insertAdjacentHTML('beforeend', cardHtml(p));
+    const el = box.lastElementChild, h = () => el.getBoundingClientRect().height / mm;
+    el.style.setProperty('--k', k);
+    const n = { html:el.outerHTML, wide:false, h:h() };
+    el.classList.add('wide');
+    let kk = k;
+    for (let i = 0; i < 4 && h() > PH; i++) { kk = Math.max(.5, kk * PH / h() * .98); el.style.setProperty('--k', kk); }
+    const w = { html:el.outerHTML, wide:true, h:Math.min(h(), PH) };
+    el.remove();
+    return { n:n.h <= PH ? n : null, w };
+  });
+  // first fit, in order: a card goes in the first page/column with room (one column if it fits, otherwise full width)
+  const pack = cards => {
+    const pages = [];
+    const tryPage = (pg, c) => {
+      if (c.n) for (const k of pg.col[0] <= pg.col[1] ? [0, 1] : [1, 0]) if (pg.col[k] + c.n.h <= PH) { pg.items.push({ c:c.n, x:k * (CW + GAP), y:pg.col[k] }); pg.col[k] += c.n.h + GAP; return true; }
+      const y = Math.max(pg.col[0], pg.col[1]);
+      if (!c.n && y + c.w.h <= PH) { pg.items.push({ c:c.w, x:0, y }); pg.col = [y + c.w.h + GAP, y + c.w.h + GAP]; return true; }
+      if (c.n && pg.items.length && y + c.w.h <= PH) { pg.items.push({ c:c.w, x:0, y }); pg.col = [y + c.w.h + GAP, y + c.w.h + GAP]; return true; }
+      return false;
+    };
+    cards.forEach(c => { if (!pages.some(pg => tryPage(pg, c))) { const pg = { col:[0, 0], items:[] }; pages.push(pg); tryPage(pg, c); } });
+    return pages;
+  };
+  // if slightly smaller text saves a page, use it (never below 85 %)
+  let pages = pack(measure(1));
+  for (const k of [.93, .86]) { const alt = pack(measure(k)); if (alt.length < pages.length) { pages = alt; break; } }
+  box.remove();
+  return pages.map(pg => `<div class="pr-page">${pg.items.map(({ c, x, y }) => `<div class="pr-pos" style="left:${x}mm;top:${y}mm">${c.html}</div>`).join('')}</div>`).join('');
+}
+function doPrint(f){ printing = true; hideMenu(); $('#sheet').hidden = true; $('#print').innerHTML = printPages(f || S.filter); setTimeout(() => window.print(), 50); }
+window.addEventListener('beforeprint', () => { if (!printing) $('#print').innerHTML = printPages(S.filter); });
 window.addEventListener('afterprint', () => { printing = false; $('#print').innerHTML = ''; });
 
 /* ---------- keyboard shortcuts sheet ---------- */
