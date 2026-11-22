@@ -1594,12 +1594,7 @@ function printPages(f){
   // the biggest text (up to 130 %) that still needs the fewest pages; smaller (down to 86 %) only if it saves a page
   const KS = [1.3, 1.24, 1.18, 1.12, 1.06, 1, .93, .86], tries = KS.map(k => pack(measure(k)));
   const least = Math.min(...tries.map(t => t.length));
-  const ki = tries.findIndex(t => t.length === least), pages = tries[ki];
-  // then each page on its own: its papers as big as they still fit on that one page
-  pages.forEach((pg, i) => {
-    const list = pg.items.map(it => it.p);
-    for (const k of KS.slice(0, ki)) { const alt = pack(measure(k, list)); if (alt.length === 1) { pages[i] = alt[0]; break; } }
-  });
+  const pages = tries.find(t => t.length === least);   // one text size for the whole printout
   box.remove();
   return pages.map(pg => `<div class="pr-page">${pg.items.map(({ c, x, y }) => `<div class="pr-pos" style="left:${x}mm;top:${y}mm">${c.html}</div>`).join('')}</div>`).join('');
 }
