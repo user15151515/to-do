@@ -416,9 +416,9 @@ ul.drop{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;ga
 #print,.pr-measure{font-family:var(--ui);color:#111;-webkit-print-color-adjust:exact;print-color-adjust:exact}
 .pr-page{position:relative;width:210mm;height:296mm;overflow:hidden;break-after:page;page-break-after:always}
 .pr-page:last-child{break-after:auto;page-break-after:auto}
-.pr-pos{position:absolute;margin:13mm 0 0 12mm}
-.pr-card{--k:1;box-sizing:border-box;width:91mm;background:#fff;border:.35mm dashed #a8a8a8;border-radius:2.5mm;padding:3.6mm 4mm 3.4mm 6.4mm;position:relative}
-.pr-card.wide{width:186mm}
+.pr-pos{position:absolute;margin:8mm 0 0 8mm}
+.pr-card{--k:1;box-sizing:border-box;width:95mm;background:#fff;border:.35mm dashed #a8a8a8;border-radius:2.5mm;padding:3.6mm 4mm 3.4mm 6.4mm;position:relative}
+.pr-card.wide{width:194mm}
 .pr-card::before{content:"";position:absolute;left:2.4mm;top:3.6mm;bottom:3.4mm;width:.9mm;border-radius:1mm;background:var(--c)}
 .pr-meta{display:flex;justify-content:space-between;gap:3mm;font-size:calc(8pt * var(--k));color:#666}
 .pr-meta b{color:var(--c);font-weight:600}
@@ -1557,16 +1557,16 @@ function cardHtml(p){
     ${p.note ? `<p class="pr-note">${esc(p.note)}</p>` : ''}
   </section>`;
 }
-/* lays the cards out on A4 pages (two columns of 91 mm, 271 mm high, 12–13 mm margins): a card that doesn't fit a column
+/* lays the cards out on A4 pages (two columns of 95 mm, 280 mm high, 8 mm margins all round): a card that doesn't fit a column
    takes the whole width with its lines in two columns; one that doesn't fit a page is printed smaller */
 function printPages(f){
   const ps = (f === 'all' ? S.papers : S.papers.filter(p => p.subject === f)).filter(p => !isHidden(p));
   if (!ps.length) return '<div class="pr-page"><p>No hay papeles.</p></div>';
   const box = document.createElement('div'); box.className = 'pr-measure'; document.documentElement.appendChild(box);   // outside <body>: measurable also while printing
   const ruler = document.createElement('div'); ruler.style.width = '100mm'; box.appendChild(ruler);
-  const mm = ruler.getBoundingClientRect().width / 100 || 3.7795, PH = 271, CW = 91, GAP = 4, W = 186;
+  const mm = ruler.getBoundingClientRect().width / 100 || 3.7795, PH = 280, CW = 95, GAP = 4, W = 194;
   // measure every card narrow (one column) and wide (whole width, lines in two columns) at text scale k
-  const measure = k => ps.map(p => {
+  const measure = (k, list = ps) => list.map(p => {
     box.insertAdjacentHTML('beforeend', cardHtml(p));
     const el = box.lastElementChild, h = () => el.getBoundingClientRect().height / mm;
     el.style.setProperty('--k', k);
@@ -1576,24 +1576,30 @@ function printPages(f){
     for (let i = 0; i < 4 && h() > PH; i++) { kk = Math.max(.5, kk * PH / h() * .98); el.style.setProperty('--k', kk); }
     const w = { html:el.outerHTML, wide:true, h:Math.min(h(), PH) };
     el.remove();
-    return { n:n.h <= PH ? n : null, w };
+    return { p, n:n.h <= PH ? n : null, w };
   });
   // first fit, in order: a card goes in the first page/column with room (one column if it fits, otherwise full width)
   const pack = cards => {
     const pages = [];
     const tryPage = (pg, c) => {
-      if (c.n) for (const k of pg.col[0] <= pg.col[1] ? [0, 1] : [1, 0]) if (pg.col[k] + c.n.h <= PH) { pg.items.push({ c:c.n, x:k * (CW + GAP), y:pg.col[k] }); pg.col[k] += c.n.h + GAP; return true; }
+      if (c.n) for (const k of pg.col[0] <= pg.col[1] ? [0, 1] : [1, 0]) if (pg.col[k] + c.n.h <= PH) { pg.items.push({ c:c.n, p:c.p, x:k * (CW + GAP), y:pg.col[k] }); pg.col[k] += c.n.h + GAP; return true; }
       const y = Math.max(pg.col[0], pg.col[1]);
-      if (!c.n && y + c.w.h <= PH) { pg.items.push({ c:c.w, x:0, y }); pg.col = [y + c.w.h + GAP, y + c.w.h + GAP]; return true; }
-      if (c.n && pg.items.length && y + c.w.h <= PH) { pg.items.push({ c:c.w, x:0, y }); pg.col = [y + c.w.h + GAP, y + c.w.h + GAP]; return true; }
+      if (!c.n && y + c.w.h <= PH) { pg.items.push({ c:c.w, p:c.p, x:0, y }); pg.col = [y + c.w.h + GAP, y + c.w.h + GAP]; return true; }
+      if (c.n && pg.items.length && y + c.w.h <= PH) { pg.items.push({ c:c.w, p:c.p, x:0, y }); pg.col = [y + c.w.h + GAP, y + c.w.h + GAP]; return true; }
       return false;
     };
     cards.forEach(c => { if (!pages.some(pg => tryPage(pg, c))) { const pg = { col:[0, 0], items:[] }; pages.push(pg); tryPage(pg, c); } });
     return pages;
   };
-  // if slightly smaller text saves a page, use it (never below 85 %)
-  let pages = pack(measure(1));
-  for (const k of [.93, .86]) { const alt = pack(measure(k)); if (alt.length < pages.length) { pages = alt; break; } }
+  // the biggest text (up to 130 %) that still needs the fewest pages; smaller (down to 86 %) only if it saves a page
+  const KS = [1.3, 1.24, 1.18, 1.12, 1.06, 1, .93, .86], tries = KS.map(k => pack(measure(k)));
+  const least = Math.min(...tries.map(t => t.length));
+  const ki = tries.findIndex(t => t.length === least), pages = tries[ki];
+  // then each page on its own: its papers as big as they still fit on that one page
+  pages.forEach((pg, i) => {
+    const list = pg.items.map(it => it.p);
+    for (const k of KS.slice(0, ki)) { const alt = pack(measure(k, list)); if (alt.length === 1) { pages[i] = alt[0]; break; } }
+  });
   box.remove();
   return pages.map(pg => `<div class="pr-page">${pg.items.map(({ c, x, y }) => `<div class="pr-pos" style="left:${x}mm;top:${y}mm">${c.html}</div>`).join('')}</div>`).join('');
 }
